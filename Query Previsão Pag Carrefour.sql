@@ -1,0 +1,14 @@
+
+USE BD_MIS
+GO
+
+
+SELECT 
+		* 
+FROM SCC_WEDOO with(nolock)
+WHERE ID_CEDENTE = 3
+AND CONVERT(date, DT_PROX_PARCELA, 103)
+BETWEEN CAST(GETDATE() - DATEPART(DAY,GETDATE() -1) AS DATE) AND DateAdd(Day,-1,Dateadd(Month,1, Convert(char(08),getdate(), 126) + '01'))
+ORDER BY 
+		DT_PROX_PARCELA DESC
+
