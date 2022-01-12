@@ -1,0 +1,1 @@
+# Querys-Parada-PostGreSQL
