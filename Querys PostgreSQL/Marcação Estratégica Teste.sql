@@ -1,3 +1,4 @@
+
 /*::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::*/																	
 /* PROGRAMADOR: KAIKE NATAN						                                                                         */
 /* VERSAO     : 1.0      DATA: 03/11/2021                                                                             */
@@ -174,7 +175,7 @@ SELECT
 			,CAST(NULL AS VARCHAR) AS NINE
 FROM TEMP_MARCACAO_ESTRATEGIA
 WHERE CARTEIRA_PLAN_1 = 'INDENI'
-AND EXTRACT(isodow from CURRENT_DATE - 12) NOT IN (0,6)
+--AND EXTRACT(isodow from CURRENT_DATE - 12) NOT IN (0,6)
 GROUP BY  EXTERNAL_ID
 			,Recebido_Banco
 			,NOME_contato 
@@ -582,7 +583,19 @@ UNION ALL
 SELECT *
 FROM AGRESSOR_FINAL
 /*:::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::*/
-/* DESCRICAO  : LAYOUT FINAL																		*/
+/* DESCRICAO  : LAYOUT FINAL JÁ COM AS ESTATÉGIAS CORRIGIDAS							*/
+/*:::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::*/
+SELECT 
+ 		ID
+,		COALESCE(one,two,tre,four,five,six,seven,eight,nine) AS TO_DO_ESTRATEGIA
+FROM FINALMENTE_ACABOU
+
+/*:::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::*/
+/* DESCRICAO  : SELECIONA DA BASE O QUE ESTÁ COM A CARTEIRA ERRADA					*/
 /*:::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::*/
 SELECT *
-FROM FINALMENTE_ACABOU
+FROM TEMP_MARCACAO_ESTRATEGIA
+WHERE carteira_plan_1 NOT IN ('PLANOS','PARALELO','HONORÁRIO','INDENI','ATIVAS','TRAB','AGRESSOR') 
+OR carteira_plan_1 IS NULL
+
+
