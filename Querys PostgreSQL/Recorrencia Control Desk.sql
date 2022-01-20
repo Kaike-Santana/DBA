@@ -25,7 +25,7 @@ SELECT	 CONCAT('__export__.mmp_pre_dossie_',A.ID) 			AS EXTERNAL_ID
 			,CAST(A.create_date AS DATE)								AS CREATE_DATE
 			,A.dt_envio_banco 											AS Recebido_Banco
 			,A.cpf 															AS CPF
-			,CASE 
+			,upper(CASE 
 					WHEN D.name 		    IS NULL 
 					OR   D.name   =      'Sem Advogado' 
 					OR   D.name  LIKE    'Defensoria%' 
@@ -45,7 +45,7 @@ SELECT	 CONCAT('__export__.mmp_pre_dossie_',A.ID) 			AS EXTERNAL_ID
 		   		OR   D.name   = 		'SEM ADV CADASTRADO'
 		   		OR   D.name   = 		'SEM PROCURADOR'
 					THEN 'FLAG'  ELSE     D.name 
-			 END																AS NOME_contato 
+			 END)																AS NOME_contato 
 			,G.name  														AS	NOME_AUTOR
 			,A.name 															AS DOSSIE
 			,A.processo														AS N_PROCESSO
@@ -100,29 +100,26 @@ WHERE (
 /*:::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::*/
 /* DESCRICAO  : CONTA QUANTAS VEZES O NOME CONTATO SE REPETE			    			*/
 /*:::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::*/
-DROP TABLE IF EXISTS TEMP_TESTE; 
-CREATE TEMPORARY TABLE TEMP_TESTE AS
-
-
-SELECT 	
-			NOME_CONTATO
-,			COUNT(NOME_CONTATO) AS RECORRENCIA_CONTATO
-FROM 
-		TEMP_ANALITICO_RECORRENCIA
-GROUP BY 1
-ORDER BY 2 DESC
-
-/*:::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::*/
-/* DESCRICAO  : SEPARA O QUE É LISTA E INDIVIDUAL							    			*/
-/*:::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::*/
-DROP TABLE IF EXISTS TEMP_RECORRENCIA_2; 
-CREATE TEMPORARY TABLE TEMP_RECORRENCIA_2 AS
+DROP TABLE IF EXISTS TEMP_REC_1; 
+CREATE TEMPORARY TABLE TEMP_REC_1 AS
 
 SELECT 
-			*
-,			CASE WHEN RECORRENCIA_CONTATO > 1 THEN 'l' ELSE 'i' END AS REC_2
-FROM 
-		TEMP_TESTE
+
+		nome_contato
+,     COUNT(nome_contato)	AS REC_1
+FROM TEMP_ANALITICO_RECORRENCIA
+GROUP BY 1
+ORDER BY 1
+/*:::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::*/
+/* DESCRICAO  : CONTA QUANTAS VEZES O NOME CONTATO SE REPETE			    			*/
+/*:::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::*/
+DROP TABLE IF EXISTS TEMP_REC_2; 
+CREATE TEMPORARY TABLE TEMP_REC_2 AS
+
+SELECT 
+		*
+,		CASE WHEN REC_1 > 1 THEN 'l' ELSE 'i' END REC_2
+FROM 	TEMP_REC_1
 
 /*:::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::*/
 /* DESCRICAO  : FAZ A COMPARAÇÃO COM A COLUNA ORIGINAL VENDO O QUE FOI ALTERADO	*/
@@ -131,36 +128,28 @@ DROP TABLE IF EXISTS TEMP_RECORRENCIA_3;
 CREATE TEMPORARY TABLE TEMP_RECORRENCIA_3 AS
 
 SELECT 
-			X.*
-,			Y.RECORRENCIA_CONTATO
-,			Y.REC_2
-,			CASE WHEN Y.REC_2 = X.recorrencia THEN 'VERDADEIRO' ELSE 'FALSO' END AS VALIDACAO
-FROM
-		TEMP_ANALITICO_RECORRENCIA X
-		
-JOIN	TEMP_RECORRENCIA_2 			Y
-
-ON (X.NOME_CONTATO = Y.NOME_CONTATO)
-
+			X.*	
+,			Y.rec_1
+,			Y.rec_2
+,			CASE WHEN X.recorrencia = Y.rec_2 THEN 'VERDADEIRO' ELSE 'FALSO' END Validacao
+FROM 	TEMP_ANALITICO_RECORRENCIA X
+LEFT JOIN TEMP_REC_2 			   Y ON (X.nome_contato = Y.nome_contato)
 /*::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::*/
 /* DESCRICAO: DELETA VERDADEIRO, CONCLUÍDO E OQ ERA LISTA E PASSOU A SER INDIVIDUAL */
 /*::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::*/
-		
 DELETE FROM TEMP_RECORRENCIA_3
-WHERE recorrencia = 'l' 
-AND   REC_2 = 'i'
-OR (
-			VALIDACAO = 'VERDADEIRO'
-		OR STATUS = '10c'
-	 )
+WHERE validacao = 'VERDADEIRO'
+DELETE FROM TEMP_RECORRENCIA_3
+WHERE (
+				recorrencia = 'l'
+			OR recorrencia IS null
+		)
+AND rec_2 = 'i' 
+
+DELETE FROM TEMP_RECORRENCIA_3
+WHERE status = '10c'
+
+SELECT * FROM TEMP_RECORRENCIA_3
 				
-/*::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::*/
-/* DESCRICAO: DELETA VERDADEIRO, CONCLUÍDO E OQ ERA LISTA E PASSOU A SER INDIVIDUAL */
-/*::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::*/		
-SELECT 
-		EXTERNAL_ID
-,		CASE WHEN REC_2 = 'l' THEN 'Lista' ELSE 'KAIKE OLHA AQUI' END AS STATUS
-	 
-FROM TEMP_RECORRENCIA_3
 
 
