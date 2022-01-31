@@ -120,7 +120,6 @@ SELECT
 		*
 ,		CASE WHEN REC_1 > 1 THEN 'l' ELSE 'i' END REC_2
 FROM 	TEMP_REC_1
-
 /*:::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::*/
 /* DESCRICAO  : FAZ A COMPARAÇÃO COM A COLUNA ORIGINAL VENDO O QUE FOI ALTERADO	*/
 /*:::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::*/
@@ -139,6 +138,7 @@ LEFT JOIN TEMP_REC_2 			   Y ON (X.nome_contato = Y.nome_contato)
 /*::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::*/
 DELETE FROM TEMP_RECORRENCIA_3
 WHERE validacao = 'VERDADEIRO'
+
 DELETE FROM TEMP_RECORRENCIA_3
 WHERE (
 				recorrencia = 'l'

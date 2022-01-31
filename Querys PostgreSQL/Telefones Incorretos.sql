@@ -138,6 +138,19 @@ ALTER TABLE TEMP_TABELA_FINAL
 	DROP COLUMN TEL_DUPLICADOS
 ,	DROP COLUMN DOSSIE_DUPLICADOS
 
+
+
+DROP TABLE IF EXISTS TEMP_MODELAGEM_TEL;
+CREATE TEMPORARY TABLE TEMP_MODELAGEM_TEL AS
+SELECT *
+,RTRIM(
+	LTRIM(
+		CASE 
+					  WHEN CHAR_LENGTH (regexp_replace(telefone, '\d', '', 'g')) < CHAR_LENGTH (telefone) 
+					  THEN regexp_replace(telefone, '[^0-9]', '', 'g')
+					  ELSE NULL 
+ 		END)) 	  AS TEL_TRATADO
+FROM TEMP_TABELA_FINAL
 /*:::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::*/
 /* DESCRICAO  : FAZ A VALIDAÇÃO DAS COLUNAS DE TELEFONE						  			*/
 /*:::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::*/
@@ -145,30 +158,32 @@ DROP TABLE IF EXISTS TEMP_MODELAGEM_FINAL;
 CREATE TEMPORARY TABLE TEMP_MODELAGEM_FINAL AS
 
 SELECT 
-			*
-,			IIF(LENGTH(TELEFONE) NOT IN ('10','11') , TELEFONE, 'ND A FAZER') AS TELEFONES_INCORRETOS
-,			LENGTH(TELEFONE)																	AS NUM_CARACTER
-,			IIF(SUBSTRING(TELEFONE,3,1) != '9', TELEFONE, 'ND A FAZER') 		AS CELULARES_INCORRETOS
-,			SUBSTRING(TELEFONE,3,1)															AS VL_TEL
+	ID_TELEFONE
+,	TEL_TRATADO
+,	IIF(LENGTH(TEL_TRATADO) = '10' AND SUBSTRING(TEL_TRATADO,3,1) != '9','ND A FAZER',TEL_TRATADO)  AS FIXOS_INCORRETOS
+,	IIF(LENGTH(TEL_TRATADO) = '11' AND SUBSTRING(TEL_TRATADO,3,1)  = '9','ND A FAZER',TEL_TRATADO) 	AS CELULARES_INCORRETOS
+,	LENGTH(TEL_TRATADO)																										AS NUM_CARACTER
+,	SUBSTRING(TEL_TRATADO,3,1)																								AS VL_TEL
 
 FROM 
-		TEMP_TABELA_FINAL
+		TEMP_MODELAGEM_TEL
 WHERE
 		STATUS_TELEFONE != 'Telefone incorreto'
 		
 /*:::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::*/
 /* DESCRICAO  : TABELA FINAL SOMENTE COM OS TELEFONES A SEREM TRATADOS				*/
-/*:::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::*/	
-
+/*:::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::*/
+	
 SELECT 
-			*
+		ID_TELEFONE
+,		TEL_TRATADO
+,		LENGTH(TEL_TRATADO)    	   AS NUM_CARACTER
+,		SUBSTRING(TEL_TRATADO,3,1) AS TIPO_TEL
 FROM 
 		TEMP_MODELAGEM_FINAL
 WHERE
-		TELEFONES_INCORRETOS != 'ND A FAZER'
+		FIXOS_INCORRETOS 		!= 'ND A FAZER'
 AND 
 		CELULARES_INCORRETOS != 'ND A FAZER'
-		
-	
 		
 		

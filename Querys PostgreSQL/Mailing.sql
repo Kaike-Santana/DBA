@@ -69,6 +69,7 @@ SELECT
 			,X_MARCACAO_PLANEJAMENTO_2 					AS 	CANAL
 			,H.NAME 												AS 	FASE_PROCESSO
 			,A.COUNT_TYPE										AS 	RECORRENCIA
+			,A.data_vencimento
 
 FROM		 public.mmp_pre_dossie A
 
@@ -100,10 +101,6 @@ ON			 (E.id				=			 B.status_id)
 
 WHERE		 
 			 A.state IN ('01ac','06me')
-AND		 
-			 c.inativa = 'false'
-AND		 
-			 E.DIAL = 'sim'
 AND 		 
 			 X_MARCACAO_PLANEJAMENTO_2 = 'Digital'
 			 
@@ -143,7 +140,8 @@ SELECT
 			,CARTEIRA
 			,CANAL
 			,FASE_PROCESSO
-			,RECORRENCIA			
+			,RECORRENCIA	
+			,DATA_VENCIMENTO		
 FROM	
 		TEMP_ANALITICO_MAILING
 /*:::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::*/
@@ -167,7 +165,7 @@ SELECT
 			,STATUS_TELEFONE
 			,VALOR_FAIXA1
 			,VALOR_FAIXA_2
-			,PRIMEIRO_NOME
+			,CASE WHEN LENGTH(PRIMEIRO_NOME) < 2 THEN NOME_CONTATO ELSE PRIMEIRO_NOME END FIRST_NAME 
 			,TELEFONE
 			,VALIDACAO_CEL
 			,VALIDACAO_TEL
@@ -176,6 +174,7 @@ SELECT
 			,CANAL
 			,FASE_PROCESSO
 			,UPPER(RECORRENCIA) 															  AS RECORRENCIA
+			,DATA_VENCIMENTO
          ,ROW_NUMBER () OVER (PARTITION BY TELEFONE ORDER BY EXTERNAL_ID) AS TEL_DUPLICADOS
          ,ROW_NUMBER () OVER (PARTITION BY DOSSIE   ORDER BY EXTERNAL_ID) AS DOSSIE_DUPLICADOS
 FROM 
@@ -205,7 +204,7 @@ ALTER TABLE TEMP_TABELA_FINAL
 SELECT 
 		CARTEIRA,
 		TELEFONE,
-		PRIMEIRO_NOME || ',' || 
+		FIRST_NAME || ',' || 
 		CASE 
 				WHEN CARTEIRA = 'PLANOS'   THEN 'Seu cliente tem valores a receber referente a planos economicos. Sabia? Clique no link: https://bit.ly/MMP-Contatos e fale conosco'
 				WHEN CARTEIRA = 'HONORÁRIO'THEN 'Nao perca oportunidade de regularizar seu debito! Entre em contato atraves do link bit.ly/MMP-Contatos'
@@ -243,7 +242,7 @@ ORDER
 		BY	VALOR_FAIXA_2 DESC, -- DE Z a A
 			STATUS_TELEFONE ASC -- DE A a Z
 LIMIT 
-		500
+		2000
 
 /*:::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::*/
 /* DESCRICAO  : 	WHATS APP PLANOS ( SANTANDER )					  			 			*/
@@ -288,8 +287,9 @@ ORDER
 /*:::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::*/
 /* DESCRICAO  : 	WHATS APP ( PARALELO )									  			 		*/
 /*:::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::*/	
-SELECT 
-			PRODUTO
+SELECT
+			EXTERNAL_ID 
+,			PRODUTO
 ,			CAMPANHA
 ,			CARTEIRA
 ,			LTRIM(RTRIM('55'|| TELEFONE ||','|| NOME_CONTATO)) AS ZAP_ZAP
@@ -302,8 +302,8 @@ AND
 		STATUS != '06me'	
 ORDER 
 		BY	VALOR_FAIXA_2 DESC, -- DE Z a A
-			STATUS_TELEFONE ASC -- DE A a Z
-
+			STATUS_TELEFONE ASC -- DE A a Z			
+			
 /*:::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::*/
 /* DESCRICAO  : 	WHATS APP ( INDENIZATORIO )							  			 		*/
 /*:::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::*/	
