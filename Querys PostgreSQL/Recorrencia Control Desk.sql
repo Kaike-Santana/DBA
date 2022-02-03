@@ -25,7 +25,7 @@ SELECT	 CONCAT('__export__.mmp_pre_dossie_',A.ID) 			AS EXTERNAL_ID
 			,CAST(A.create_date AS DATE)								AS CREATE_DATE
 			,A.dt_envio_banco 											AS Recebido_Banco
 			,A.cpf 															AS CPF
-			,upper(CASE 
+			,UPPER(CASE 
 					WHEN D.name 		    IS NULL 
 					OR   D.name   =      'Sem Advogado' 
 					OR   D.name  LIKE    'Defensoria%' 
@@ -62,23 +62,12 @@ SELECT	 CONCAT('__export__.mmp_pre_dossie_',A.ID) 			AS EXTERNAL_ID
 			,A.oab															AS OAB
 			,H.name  														AS FASE
 						
-FROM				mmp_pre_dossie A
-JOIN	
-					res_partner G
-ON		   (A.autor_id	= G.id)
-
-JOIN		   	res_partner D
-ON			(A.contato_id = D.id)
-
-JOIN		 		mmp_pre_campanha C
-ON			(C.id =	A.campanha_id)
-
-JOIN		   	mmp_pre_client_group F
-ON			(A.group_id = F.id)
-
-JOIN		 		mmp_pre_dossie_fase H
-ON			 (A.fase_id = H.ID)
-
+FROM			mmp_pre_dossie A
+LEFT JOIN	res_partner G			  ON	(A.autor_id		=  G.id)
+LEFT JOIN	res_partner D  		  ON	(A.contato_id  =  D.id)
+LEFT JOIN	mmp_pre_campanha C	  ON	(C.id 			=	A.campanha_id)
+LEFT JOIN	mmp_pre_client_group F ON	(A.group_id 	= 	F.id)
+LEFT JOIN	mmp_pre_dossie_fase H  ON	(A.fase_id 		= 	H.ID)
 WHERE		 A.state != '10c'
 OR A.data_conclusao >= CURRENT_DATE - 60
 
@@ -96,7 +85,6 @@ WHERE (
 										  'SANTANDER AGRESSOR - 2021 - JULYANA FRANCO GOMES','SANTANDER AGRESSOR - 2021 - Pedro Francisco Guimarães Solino'
 										)
 		)	
-		SELECT * FROM TEMP_ANALITICO_RECORRENCIA
 /*:::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::*/
 /* DESCRICAO  : CONTA QUANTAS VEZES O NOME CONTATO SE REPETE			    			*/
 /*:::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::*/
@@ -137,19 +125,20 @@ LEFT JOIN TEMP_REC_2 			   Y ON (X.nome_contato = Y.nome_contato)
 /* DESCRICAO: DELETA VERDADEIRO, CONCLUÍDO E OQ ERA LISTA E PASSOU A SER INDIVIDUAL */
 /*::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::*/
 DELETE FROM TEMP_RECORRENCIA_3
-WHERE validacao = 'VERDADEIRO'
-
-DELETE FROM TEMP_RECORRENCIA_3
 WHERE (
 				recorrencia = 'l'
 			OR recorrencia IS null
 		)
 AND rec_2 = 'i' 
-
-DELETE FROM TEMP_RECORRENCIA_3
-WHERE status = '10c'
-
-SELECT * FROM TEMP_RECORRENCIA_3
+OR	 status = '10c'
+OR  validacao = 'VERDADEIRO'
+/*::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::*/
+/* DESCRICAO: LAYOUT FINAL PARA SUBIR NO ODOO													*/
+/*::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::*/
+SELECT 
+		EXTERNAL_ID
+,		IIF(REC_2 = 'l', 'Lista', REC_2) AS RECORRENCIA
+FROM TEMP_RECORRENCIA_3
 				
 
 
