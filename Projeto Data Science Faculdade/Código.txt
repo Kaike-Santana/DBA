@@ -1,0 +1,270 @@
+#Importando bibliotecas:
+%matplotlib inline
+import pandas as pd #Para criação de DataFrames
+import matplotlib.pyplot as plt #Para plotagem
+import random
+
+
+Leitura dos dataset:
+ocorrencia = pd.read_csv('./dataset/ocorrencia.csv')
+aeronave = pd.read_csv('./dataset/aeronave.csv')
+print('O arquivo \"ocorrencia.csv\" ' + str(ocorrencia.shape[0]) + ' linhas e ' + str(ocorrencia.shape[1]) + ' colunas')
+O arquivo "ocorrencia.csv" 2027 linhas e 19 colunas
+print('O arquivo \"aeronave.csv\" ' + str(aeronave.shape[0]) + ' linhas e ' + str(aeronave.shape[1]) + ' colunas')
+
+
+#Limpeza de Dados (Data Cleaning):
+
+ocorrencia.head(5)
+
+ocorrencia.dtypes
+
+#Colunas do arquivo 'ocorrencia.csv'
+ocorrencia.columns
+
+
+#Retirando colunas que não serão usadas
+ocorrencia.drop(['aerodromo','horario','sera_investigada','comando_investigador',
+                 'relatorio_publicado','dia_publicacao','quantidade_recomendacoes',
+                 'aeronaves_envolvidas','saida_pista','dia_extracao', 'numero_relatorio'], axis = 1, inplace = True)
+				 
+				 
+#Renomeando colunas do dataset ocorrencia.csv
+ocorrencia.columns = ['CÓDIGO DA OCORRÊNCIA','CLASSIFICAÇÃO','TIPO DE OCORRÊNCIA','LOCALIDADE',
+                      'UF','PAÍS','DIA DA OCORRÊNCIA','STATUS DA INVESTIGAÇÃO']
+
+#Inserindo coluna para contagem
+ocorrencia['CONTAGEM'] = 1
+
+
+#Derrubando colunas onde o código da ocorrência é inválido
+ocorrencia['CÓDIGO DA OCORRÊNCIA'].dropna(axis = 0, inplace = True)
+
+
+ocorrencia.head()
+
+
+#Visualização dos Dados (Data Visualization)
+
+
+#Cores para serem usadas nos gráficos
+colors = [['#0D47A1','#1565C0','#1976D2','#1E88E5','#2196F3'],
+          ['#311B92','#512DA8','#673AB7','#9575CD','#B39DDB'],
+          ['#1B5E20','#388E3C','#4CAF50','#81C784','#66BB6A'],
+          ['#E65100','#EF6C00','#F57C00','#FB8C00','#FF9800'],
+          ['#3E2723','#4E342E','#5D4037','#6D4C41','#795548'],
+          ['#BF360C','#D84315','#E64A19','#F4511E','#FF5722'],
+          ['#880E4F','#AD1457','#C2185B','#D81B60','#E91E63']
+         ]
+		 
+
+classificacao = ocorrencia.groupby('CLASSIFICAÇÃO')['CONTAGEM'].sum().plot(kind='bar', figsize=(10,5), color=random.choice(colors), alpha=.7)
+
+for p in classificacao.patches:
+    b=p.get_bbox()
+    classificacao.annotate("{:.0f}".format(b.y1 + b.y0), ((b.x0 + b.x1)/2 - 0.03, b.y1 + 15))
+
+plt.xticks(rotation=0)
+plt.xlabel('CLASSIFICAÇÃO DA OCORRÊNCIA')
+plt.ylabel('QUANTIDADE')
+plt.title('QUANTIDADE DE OCORRÊNCIAS POR CLASSIFICAÇÃO \n Total: ' + str(ocorrencia['CONTAGEM'].sum()) + ' ocorrências')
+plt.show()
+
+
+#Quais os tipos de ocorrências que existem e qual foi sua frequência nestes últimos anos?
+
+ax = ocorrencia.groupby('TIPO DE OCORRÊNCIA')['CONTAGEM'].sum().sort_values().plot(kind='barh', color=random.choice(colors), figsize=(10,10))
+
+for p in ax.patches:
+    b=p.get_bbox()
+    ax.annotate("{:.0f}".format(b.x1 + b.x0), (p.get_x() + p.get_width() + 1, p.get_y() - 0.05))
+
+plt.title('QUANTIDADE DE OCORRÊNCIAS AGRUPADAS POR TIPO \n Total: ' + str(ocorrencia['CONTAGEM'].sum()) + ' ocorrências')
+plt.ylabel('TIPO DE OCORRÊNCIA')
+plt.xlabel('QUANTIDADE DE OCORRÊNCIA')
+plt.show()
+
+
+#Como tem sido a progressão desses últimos anos? Tiveram menos ocorrências ou mais?
+
+plotagem_data = ocorrencia.copy()
+plotagem_data['DIA DA OCORRÊNCIA'] = plotagem_data['DIA DA OCORRÊNCIA'].apply(lambda x: x.replace(x,x[0:4]))
+plotagem_data.groupby('DIA DA OCORRÊNCIA')['CONTAGEM'].sum().plot(color='purple', figsize=(12,5), grid=True)
+
+plt.title('QUANTIDADE DE OCORRÊNCIA AO LONGO DOS ANOS \n Total: ' + str(ocorrencia['CONTAGEM'].sum()) + ' ocorrências')
+plt.xlabel('ANO REFERÊNCIA')
+plt.ylabel('QUANTIDADE DE OCORRÊNCIAS')
+plt.show()
+
+
+#E quanto aos estados? Quais foram os que mais registraram ocorrências?
+
+ax_estado =  ocorrencia.groupby('UF')['CONTAGEM'].sum().plot(kind='bar', color=random.choice(colors), figsize=(11,5))
+
+plt.xlabel('ESTADO')
+plt.ylabel('QUANTIDADE DE OCORRÊNCIAS')
+plt.title('QUANTIDADE DE OCORRÊNCIAS POR ESTADO\nTotal: ' + str(ocorrencia['CONTAGEM'].sum()) + ' ocorrências')
+plt.xticks(rotation=0)
+plt.show()
+
+
+
+#Limpeza dos Dados (Data Cleaning)
+
+aeronave.head()
+
+
+#A seguir eu retiro as colunas que não me interessam para este projeto.
+
+aeronave.drop(['codigo_aeronave','matricula','codigo_operador','peso_maximo_decolagem',
+               'categoria_registro', 'origem_voo', 'destino_voo', 'dia_extracao'], axis = 1, inplace = True)
+
+aeronave.head()
+
+
+# hora de visualizar como o Python está tratando cada coluna.
+
+aeronave.dtypes
+
+'''
+A função convert_na possui dois argumentos: um DataFrame e sua coluna. 
+Tal Series terá todos os seus valores nulos (NaN) atualizados para o numeral 0.
+'''
+
+def convert_na(dataframe, column):
+    for i in column:
+        dataframe[i].fillna(0, inplace = True)
+
+convert_na(aeronave,['quantidade_fatalidades','quantidade_motores','ano_fabricacao','quantidade_assentos'])
+
+
+'''
+A função convert_dtype possui três argumentos: um DataFrame, uma coluna (Series) e o dtype que o usuário deseja alterar.
+Para cada Series declarada na função, ela irá converter tal coluna para o dtype desejado
+'''
+
+def convert_dtype(dataframe, column, dtype):
+    for i in column:
+        dataframe[i] = dataframe[i].astype(dtype)
+
+convert_dtype(aeronave,['quantidade_motores','quantidade_assentos','ano_fabricacao','quantidade_fatalidades'],int)
+
+
+
+#Declaradas as funções e realizada as devidas alterações nas colunas
+
+#Dtypes de float alterados para int
+aeronave.dtypes
+
+#O próximo passo é renomear todas as colunas restantes nesse DataFrame para podermos ter uma visualização melhor.
+
+aeronave.columns = ['CÓDIGO DA OCORRÊNCIA','EQUIPAMENTO','FABRICANTE','MODELO','TIPO DE MOTOR','QUANTIDADE DE MOTORES',
+                    'QUANTIDADE DE ASSENTOS','ANO DE FABRICAÇÃO','PAÍS DE REGISTRO','CATEGORIA DE AVIÃO','FASE DE OPERAÇÃO',
+                    'TIPO DE OPERAÇÃO','NÍVEL DE DANO','QUANTIDADE DE FATALIDADES']
+aeronave = aeronave.apply(lambda x: x.replace('***','NÃO IDENTIFICADO'))
+aeronave['CONTAGEM'] = 1
+
+
+#Vamos visualizar como ficou o novo DataFrame.
+
+#DataFrame alterado
+aeronave.head()
+
+#Para termos certeza de que os DataFrames ocorrencia.csv e aeronave.csv são diferentes, vamos conferir no código.
+#Verificando se os dataframes são iguais
+aeronave['CÓDIGO DA OCORRÊNCIA'].equals(ocorrencia['CÓDIGO DA OCORRÊNCIA'])
+
+
+#Vamos através do código abaixo, descobrir quantas ocorrências nós temos sob o mesmo código.
+#Pegando linhas duplicadas no DataFrame
+ocorrencias_duplicadas = aeronave[aeronave['CÓDIGO DA OCORRÊNCIA'].duplicated()].reset_index(drop=True)
+ocorrencias_duplicadas.drop('CONTAGEM', axis = 1, inplace = True)
+print('Há ' + str(ocorrencias_duplicadas.shape[0]) + ' ocorrências duplicadas.')
+
+
+#Vamos visualizar algumas das ocorrências de mesmo número
+
+ocorrencias_duplicadas.head(6)
+
+#Qual tipo de motor mais gerou ocorrências nos últimos 10 anos?
+
+ax = aeronave.groupby('TIPO DE MOTOR')['CONTAGEM'].sum().sort_values().plot(kind='bar', color=random.choice(colors), figsize=(11,5))
+
+for p in ax.patches:
+    b=p.get_bbox()
+    ax.annotate("{:.0f}".format(b.y1 + b.y0), ((b.x0 + b.x1)/2 - 0.1, b.y1 + 15))
+
+plt.title('QUANTIDADE DE OCORRÊNCIAS AGRUPADAS\nPOR TIPO DE MOTOR DE AERONAVE\nTotal: '+str(aeronave['CONTAGEM'].sum())+' ocorrências')
+plt.ylabel('QUANTIDADE DE OCORRÊNCIAS')
+plt.xticks(rotation=0)
+plt.show()
+
+#Será que ocorrências envolvendo aviões aparecem em menor frequência do que para helicóptero e outras aeronaves?
+ax = aeronave.groupby('EQUIPAMENTO')['CONTAGEM'].sum().sort_values(ascending = False).plot(kind='bar', figsize=(11,5), color=random.choice(colors))
+
+for p in ax.patches:
+    b=p.get_bbox()
+    ax.annotate("{:.0f}".format(b.y1 + b.y0), ((b.x0 + b.x1)/2 - 0.1, b.y1 + 15))
+    
+plt.title('QUANTIDADE DE OCORRÊNCIAS POR TIPO DE AERONAVE\nTotal: ' + str(aeronave['CONTAGEM'].sum()) + ' ocorrências')
+plt.ylabel('QUANTIDADE DE OCORRÊNCIAS')
+plt.xticks(rotation=45)
+plt.show()
+
+#quais são as fabricantes que mais aparecem nos problemas relatados?
+ocorrencias_fabricante = aeronave.groupby('FABRICANTE')['CONTAGEM'].sum().sort_values(ascending = False)
+ocorrencias_fabricante.head(10).plot(kind='barh', figsize=(10,5), color=random.choice(colors), grid=True)
+
+plt.title('QUANTIDADE DE OCORRÊNCIAS POR FABRICANTE\nTotal: ' + str(aeronave['CONTAGEM'].sum()) + ' ocorrências')
+plt.xlabel('QUANTIDADE DE OCORRÊNCIAS NOS ÚLTIMOS 10 ANOS')
+plt.show()
+
+
+#Viagens comerciais regulares tendem a ter mais problemas do que voos fretados?
+
+categoria_aviao = aeronave.groupby('CATEGORIA DE AVIÃO')['CONTAGEM'].sum().sort_values().plot(kind='barh', figsize=(11,7), color=random.choice(colors), alpha=.8, grid = True)
+
+plt.title('QUANTIDADE DE OCORRÊNCIAS DOS ÚLTIMOS 10 ANOS\nAGRUPADAS POR CATEGORIA DE AVIÃO')
+plt.xlabel('QUANTIDADE DE OCORRÊNCIAS')
+plt.show()
+
+#Vamos agora olhar para o momento em que as ocorrências surgiram.
+fase_de_operacao = aeronave.groupby('FASE DE OPERAÇÃO')['CONTAGEM'].sum().sort_values().plot(kind='barh', figsize=(11,7), color=random.choice(colors), grid = True)
+plt.title('QUANTIDADE DE OCORRÊNCIAS POR FASE DE OPERAÇÃO\nTotal: ' + str(aeronave['CONTAGEM'].sum()) + ' ocorrências')
+plt.xlabel('QUANTIDADE DE OCORRÊNCIAS')
+plt.show()
+
+#quais são os tipos de danos que podem ocorrer a uma aeronave? Qual a frequência?
+
+tipo_de_dano = aeronave.groupby('NÍVEL DE DANO')['CONTAGEM'].sum().sort_values().plot(kind='bar', figsize=(11,5), color=random.choice(colors), grid = True)
+
+plt.title('OCORRÊNCIAS DOS ÚLTIMOS 10 ANOS AGRUPADAS\nPOR TIPO DE DANO')
+plt.ylabel('QUANTIDADE DE OCORRÊNCIAS')
+plt.xticks(rotation=0)
+plt.show()
+
+#Por fim, quero saber em quantas ocorrências houveram fatalidades.
+
+fatalidades_maior_que_zero = aeronave[aeronave['QUANTIDADE DE FATALIDADES'] > 0]
+fatalidades = fatalidades_maior_que_zero.groupby('QUANTIDADE DE FATALIDADES')['CONTAGEM'].sum().plot(kind='bar', figsize=(11,5), color=random.choice(colors))
+
+for p in fatalidades.patches:
+    b=p.get_bbox()
+    fatalidades.annotate("{:.0f}".format(b.y1 + b.y0), ((b.x0 + b.x1)/2 - 0.1, b.y1 + 2))
+    
+plt.title('QUANTIDADE DE OCORRÊNCIAS DOS ÚLTIMOS 10 ANOS AGRUPADAS\nPOR QUANTIDADE DE FATALIDADES')
+plt.ylabel('QUANTIDADE DE OCORRÊNCIA')
+plt.xticks(rotation=0)
+plt.show()
+
+
+#Abaixo, você pode conferir as duas linhas onde essas ocorrências se encontram na tabela.
+
+piores_acidentes = aeronave[aeronave['QUANTIDADE DE FATALIDADES'] > 100]
+piores_acidentes
+
+#Linha da ocorrência gerada devido ao acidente do Airbus A-320
+ocorrencia[ocorrencia['CÓDIGO DA OCORRÊNCIA'] == 29859]
+
+#O segundo pior caso completou 10 anos em 29/09/2016, quando um boeing da Gol chocou-se contra jato Legacy que se dirigia para os Estados Unidos.
+ocorrencia[ocorrencia['CÓDIGO DA OCORRÊNCIA'] == 30375]
