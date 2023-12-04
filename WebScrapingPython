@@ -1,1 +1,67 @@
 
+
+-- Programador: Kaike Natan
+-- Data: 04-02-2023
+-- Versão: 1.0
+-- Descrição: Chama o Script Python que Baixa a Carga da PraValer do SFTP, Através do SQL Server Agent (Job)
+
+-- Declaração de variáveis
+Declare @vDownLoadCargaWebScraping Varchar(1000) = '--> Caminho onde esta salvo o executavel do script em python'
+Declare @vDir1 nvarchar(1000)
+Declare @File_Exists1 int
+Declare @vTsql Varchar(1000)
+Declare @vArquivo Varchar(1000)
+Declare @vTabela Table(
+					   String Varchar(Max)
+					  )
+
+Begin;
+  Exec Xp_CmdShell @vDownLoadCargaWebScraping;
+  Print ('Executando Script que Baixa o Arquivo...')
+End;
+
+-- Lista arquivos do diretório com PowerShell
+Set @vTsql = '--> Caminho onde o arquivo baixado foi saldo na rede'
+
+-- Guarda a Listagem em Uma Variável do Tipo Tabela
+Delete From @vTabela
+Insert Into @vTabela
+Exec master.dbo.xp_cmdshell @vTsql
+
+-- Faz ETL dos dados e armazena em uma tabela temporária
+Drop Table If Exists #AuxDos
+Select	Row_Number() Over (Order by (Select 0))							 As Id
+	,	Convert(DateTime, Left(Value, 10), 103)							 As Data
+	,	Left(Substring(Value, 37, 255), CharIndex('.', Value, 37) - 37)  As Layout
+	,	Substring(Value, 37, 255)										 As Arq
+Into	#AuxDos
+From	@vTabela
+Where	Right(Value, 4) = '.txt'
+
+--Select * From #AuxDos
+
+-- Pega o Ùltimo Arquivo Da Lista (Caso Houver Mais de Um Arquivo Na Rede)
+Set @vArquivo = (
+    Select Top 1 Arq 
+    From #AuxDos 
+    Order By Id Desc
+)
+
+-- Select @vArquivo
+
+-- Time Out Para Caso de Instabilidade no WinScp
+Print Char(13) + Char(10) + Convert(Char(20),GetDate(),20) + '| Antes Deley'
+
+	Waitfor Delay '00:00:30';
+
+Print Char(13) + Char(10) + Convert(Char(20),GetDate(),20) + '| Pós Deley'
+
+-- Verifica a Existência Do Arquivo e Faz o Download Se Necessário
+If(
+   @vArquivo
+  ) Is Null
+
+ Begin;
+	Exec Xp_CmdShell @vDownLoadCargaPraValer;
+	Print ('Baixando Carga Da PraValer Novamente...')
+ End;
