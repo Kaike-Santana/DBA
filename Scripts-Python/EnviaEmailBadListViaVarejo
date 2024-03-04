@@ -1,61 +1,130 @@
-import os
-import pandas as pd
+import smtplib
 import pyodbc
+from email.mime.multipart import MIMEMultipart
+from email.mime.text import MIMEText
+from datetime import datetime
 
-# Especificar o diretório onde os arquivos estão localizados
-diretorio_origem = r'\\10.251.1.64\NectarServices\Nectar\Solfácil\Backup\Carga\Pgto_Parcela_Acordo_-_SolFacil\\'
-diretorio_destino = r'\\atlantida\MIS\00.RelatoriosMIS\SolFacil\04.Avulso\PAGAMENTOS\\'
+# Dados de autenticação SMTP
+sender_email = "kaike1010@hotmail.com.br"
+sender_password = "Deus@trino12"
 
-# Lista para armazenar os DataFrames de cada arquivo
-dfs = []
+# Dados do destinatário (lista de e-mails)
+recipient_email = [
+    "victor.simoes@atmatec.com.br",
+    "planning@atmatec.com.br",
+    "datascience@atmatec.com.br",
+    "controldesk@atmatec.com.br",
+]
 
-flag = '2024'
+# Configuração da conexão ao SQL Server
+server = "wolverine"
+database = "data_science"
+username = "python"
+password = "python@sql"
 
-# Iterar sobre os arquivos no diretório de origem
-for arquivo in os.listdir(diretorio_origem):
-    if pd.Series(arquivo).str.contains(flag).any() and arquivo.endswith(".csv"):
-        caminho_arquivo = os.path.join(diretorio_origem, arquivo)
-        
-        # Configuração da conexão ao SQL Server
-        server = "wolverine"
-        database = "data_science"
-        username = "python"
-        password = "python@sql"
+# Conexão ao SQL Server
+conn = pyodbc.connect(f"Driver={{SQL Server}};Server={server};Database={database};UID={username};PWD={password}")
 
-        # Conexão ao SQL Server
-        conn = pyodbc.connect(f"Driver={{SQL Server}};Server={server};Database={database};UID={username};PWD={password}")
-        
-        # Ler o conteúdo do arquivo para um DataFrame
-        df = pd.read_csv(caminho_arquivo, delimiter=';')  # Altere o delimitador conforme necessário
-        
-        # Adicionar uma coluna com o nome do arquivo
-        df['ARQUIVO'] = os.path.splitext(arquivo)[0]
-        
-        dfs.append(df)
-
-
-# Concatenar os DataFrames em um único DataFrame
-df_consolidado = pd.concat(dfs, ignore_index=True)
-
-df_final = df_consolidado[['ID', 'Fundo', 'Parcela', 'DiasAtraso', 'ValorPagamento', 'DataPagamentoBoleto']]
-
-# Correção para evitar SettingWithCopyWarning
-df_final.loc[:, 'ValorPagamento'] = df_final['ValorPagamento'].str.replace(',','.')
-df_final.loc[:, 'ValorPagamento'] = df_final['ValorPagamento'].astype('float')
-
-# Salvar o DataFrame consolidado no diretório de destino
-nome_planilha = f'PAGAMENTOS_{flag}.xlsx'
-caminho_destino = os.path.join(diretorio_destino, nome_planilha)
-
-df_final.to_excel(caminho_destino, index=False)
-
-# Executar truncate table
+# Criação do cursor
 cursor = conn.cursor()
-cursor.execute('TRUNCATE TABLE tb_ds_pagamentos_solfacil')
-conn.commit()
 
-# Executar insert into na tabela tb_ds_pagamentos_solfacil
-df_final.to_sql('tb_ds_pagamentos_solfacil', conn, if_exists='replace', index=False, method='multi')
+# Consulta SQL para obter a contagem de telefones
+cursor.execute("SELECT COUNT(telefone) AS telefones_novos FROM [dbo].[VW_BLKLIST_D0]")
+row = cursor.fetchone()
+phone_count = row.telefones_novos
 
-# Fechar a conexão
+# Formata o total de telefones como número com separador de milhar
+formatted_phone_count = "{:,}".format(phone_count)
+
+# Consulta SQL para obter os telefones novos
+cursor.execute("SELECT telefone FROM [dbo].[VW_BLKLIST_D0]")
+phone_records = cursor.fetchall()
+
+# Data e hora atual
+current_date = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
+current_date_str = datetime.now().strftime("%Y%m%d")
+
+# Caminho do arquivo na rede
+file_path = rf"\\polaris\NectarServices\Administrativo\Temporario\DIARIO_BLACKLIST\Telefones Novos\BadList_ViaVarejo_{current_date_str}.txt"
+
+# Escreve os resultados da consulta no arquivo de texto
+with open(file_path, "w") as file:
+    for record in phone_records:
+        file.write(record.telefone + "\n")
+
+# Corpo do e-mail em HTML com formatação CSS
+email_body = f"""
+<html>
+<head>
+<style>
+    /* Estilos CSS */
+    body {{
+        font-family: Arial, sans-serif;
+        margin: 0;
+        padding: 0;
+    }}
+    .container {{
+        background-color: white;
+        padding: 20px;
+    }}
+    .header {{
+        background-color: #404b69;
+        padding: 10px;
+        text-align: center;
+    }}
+    .subtitle {{
+        background-color: #404b69;
+        color: white;
+        padding: 5px 0;
+        text-align: center;
+    }}
+    .content {{
+        padding: 20px;
+    }}
+</style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>Atualização da BadList ViaVarejo</h1>
+        </div>
+        <div class="subtitle">
+            <h2 style="margin: 0;">{current_date}</h2>
+        </div>
+        <div class="content">
+            <p>Olá Clevson,</p>
+            <p>A BadList da ViaVarejo foi atualizada. Agora há um total de {formatted_phone_count} telefones novos para bloqueio.</p>
+            <p>Victor por favor, realize o bloqueio dos telefones no CallFlex.</p>
+            <p>Os detalhes dos telefones novos estão disponíveis no seguinte diretório:</p>
+            <p><a href="file://polaris/NectarServices/Administrativo/Temporario/DIARIO_BLACKLIST/Telefones%20Novos">Telefones Novos</a></p>
+            <p>Atenciosamente.</p>
+        </div>
+    </div>
+</body>
+</html>
+"""
+
+# Configuração do e-mail
+msg = MIMEMultipart()
+msg["From"] = sender_email
+msg["To"] = ', '.join(recipient_email)  # Transforma a lista de destinatários em uma única string
+msg["Subject"] = "Atualização da BadList ViaVarejo"
+
+# Anexa o corpo do e-mail em formato HTML
+msg.attach(MIMEText(email_body, "html"))
+
+# Conexão com o servidor SMTP do Office 365
+server = smtplib.SMTP("smtp.office365.com", 587)
+server.starttls()
+server.login(sender_email, sender_password)
+
+# Envia o e-mail
+server.sendmail(sender_email, recipient_email, msg.as_string())
+
+# Fecha a conexão
+server.quit()
+
+# Fecha a conexão ao SQL Server
 conn.close()
+
+print("E-mail enviado com sucesso!")
