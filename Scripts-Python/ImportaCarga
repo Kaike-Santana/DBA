@@ -1,0 +1,125 @@
+import paramiko
+import shutil
+from datetime import datetime
+import smtplib
+from email.mime.multipart import MIMEMultipart
+from email.mime.text import MIMEText
+
+# Configurações de conexão SFTP
+hostname = 'pravaler.zaap.net.br'
+port = 22
+username = 'atma'
+password = 'oZ38gT#20Qma'
+
+# Conectar-se ao servidor SFTP
+transport = paramiko.Transport((hostname, port))
+transport.connect(username=username, password=password)
+sftp = paramiko.SFTPClient.from_transport(transport)
+
+try:
+    # Listar arquivos no diretório remoto
+    remote_directory = '/SAIDA/'
+    files = sftp.listdir(remote_directory)
+
+    # Encontrar o arquivo correspondente ao dia atual
+    today = datetime.now().strftime('%Y%m%d')
+    matching_files = [file for file in files if file.startswith(f"ATMA{today}") and file.endswith("BAT.txt")]
+
+    if matching_files:
+        local_filename = matching_files[0]
+        remote_filepath = remote_directory + local_filename
+
+        # Construir o caminho para a pasta de arquivos processados
+        processed_directory = '/SAIDA/PROCESSADOS/'
+        remote_processed_filepath = processed_directory + local_filename
+
+        # Mover o arquivo para a pasta de arquivos processados no SFTP
+        sftp.rename(remote_filepath, remote_processed_filepath)
+        print(f"Arquivo movido para a pasta de arquivos processados: {processed_directory}")
+
+        # Baixar o arquivo correspondente ao dia atual para o diretório local
+        local_filepath = local_filename
+        sftp.get(remote_processed_filepath, local_filepath)
+
+        # Copiar o arquivo para o diretório de rede
+        network_directory = '\\\\nectar\\NectarServices\\Nectar\\Pra_Valer\\Carga'
+        shutil.copy(local_filepath, network_directory)
+        print(f"Arquivo copiado para a rede: {network_directory}")
+
+        # Lendo o conteúdo do arquivo HTML de template
+        email_body = """
+        <!DOCTYPE html>
+        <html>
+        <head>
+        <style>
+            body {
+                font-family: Arial, sans-serif;
+                background-color: #f2f2f2;
+            }
+            .container {
+                padding: 20px;
+                background-color: white;
+                border-radius: 10px;
+                box-shadow: 0px 2px 4px rgba(0, 0, 0, 0.1);
+            }
+            h2 {
+                color: #333333;
+            }
+            p {
+                color: #666666;
+            }
+        </style>
+        </head>
+        <body>
+            <div class="container">
+                <h2>Processo de Importação da Carga PraValer Concluído</h2>
+                <p>Olá Time de Sistemas,</p>
+                <p>O processo de fazer o download e upload na rede da carga da PraValer foi concluído com sucesso!</p>
+                <p>O arquivo foi movido para a pasta de arquivos processados no SFTP:</p>
+                <p><strong>/SAIDA/PROCESSADOS/</strong></p>
+                <p>Em seguida, o arquivo foi copiado para o diretório de rede:</p>
+                <p><strong>\\\\polaris\\NectarServices\\Nectar\\Pra_Valer\\Carga</strong></p>
+                <p>Atenciosamente,<br>Equipe de Tecnologia</p>
+            </div>
+        </body>
+        </html>
+        """
+
+        # Enviar e-mail de notificação
+        smtp_server = 'smtp.office365.com'
+        smtp_port = 587
+        email_usuario = 'kaike1010@hotmail.com.br'  
+        email_senha = 'Deus@trino12'  
+        email_destinatarios = ['sistemas@atmatec.com.br','datascience@atmatec.com.br','planning@atmatec.com.br']
+
+        email_subject = "Processo de Importação Concluído"
+
+        msg = MIMEMultipart("alternative")
+        msg['From'] = email_usuario
+        msg['To'] = ', '.join(email_destinatarios)
+        msg['Subject'] = email_subject
+
+        email_body = MIMEText(email_body, "html")
+        msg.attach(email_body)
+
+        try:
+            server = smtplib.SMTP(smtp_server, smtp_port)
+            server.starttls()
+            server.login(email_usuario, email_senha)
+            server.sendmail(email_usuario, email_destinatarios, msg.as_string())
+            print("E-mail enviado com sucesso.")
+        except Exception as e:
+            print("Erro ao enviar o e-mail:", e)
+        finally:
+            server.quit()
+
+    else:
+        print("Nenhum arquivo correspondente encontrado para o dia de hoje.")
+
+except Exception as e:
+    print(f"Ocorreu um erro: {e}")
+
+finally:
+    # Fecha a conexão SFTP
+    sftp.close()
+    transport.close()

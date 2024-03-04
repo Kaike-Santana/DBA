@@ -1,0 +1,136 @@
+import pyodbc
+import smtplib
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
+
+# Configurações do servidor SQL Server
+server = 'logan.atmatec.com.br'
+database = 'nectar'  
+username = 'wolverine'
+password = 'dba@atma'
+
+# Tempo mínimo de execução (10 minutos em milissegundos)
+tempo_minimo_execucao = 600000
+
+# Configurações do servidor de e-mail
+smtp_server = 'smtp.office365.com'
+smtp_port = 587
+email_usuario = 'kaike1010@hotmail.com.br'
+email_senha = 'Deus@trino12'
+email_destinatarios = ['kaike.santana@atmatec.com.br','ana.almeida@atmatec.com.br','marcelo.vieira@atmatec.com.br','datascience@atmatec.com.br']
+
+def formatar_tempo(tempo_ms):
+    segundos = int(tempo_ms / 1000)
+    minutos, segundos = divmod(segundos, 60)
+    horas, minutos = divmod(minutos, 60)
+    return f"{horas:02d}:{minutos:02d}:{segundos:02d}"
+
+def enviar_email_corpo(conteudo_email):
+    msg = MIMEMultipart("alternative")
+    msg['From'] = email_usuario
+    msg['To'] = ', '.join(email_destinatarios)
+    msg['Subject'] = 'Monitoramento de Consultas Ativas no Néctar'
+
+    # Estilos CSS para o e-mail
+    estilos_css = """
+    <style>
+    body {
+        font-family: Arial, sans-serif;
+    }
+    h2 {
+        color: #007BFF;
+    }
+    table {
+        border-collapse: collapse;
+        width: 100%;
+    }
+    th, td {
+        border: 1px solid #dddddd;
+        text-align: left;
+        padding: 8px;
+        white-space: pre-wrap; /* Para evitar que a coluna quebre a linha */
+    }
+    th {
+        background-color: #f2f2f2;
+    }
+    </style>
+    """
+
+    # Versão HTML do e-mail
+    conteudo_html = f"""\
+    <html>
+      <head>
+        {estilos_css}
+      </head>
+      <body>
+        <h2>Consultas em execução há mais de 10 minutos:</h2>
+        <table>
+          <tr>
+            <th>SPID</th>
+            <th>Usuário</th>
+            <th>Status</th>
+            <th>Banco de Dados</th>
+            <th>Tempo de Execução</th>
+            <th>Comando</th>
+          </tr>
+          {conteudo_email}
+        </table>
+      </body>
+    </html>
+    """
+
+    msg.attach(MIMEText(conteudo_email, 'plain'))
+    msg.attach(MIMEText(conteudo_html, 'html'))
+
+    with smtplib.SMTP(smtp_server, smtp_port) as server:
+        server.starttls()
+        server.login(email_usuario, email_senha)
+        server.sendmail(email_usuario, email_destinatarios, msg.as_string())
+
+def monitorar_consultas():
+    # Conectando ao SQL Server
+    conn_str = f"DRIVER={{SQL Server}};SERVER={server};DATABASE={database};UID={username};PWD={password}"
+    conn = pyodbc.connect(conn_str)
+    cursor = conn.cursor()
+
+    # Consulta para obter informações detalhadas sobre todas as consultas em execução
+    consulta_sql = """
+    SELECT
+        r.session_id AS spid,
+        s.login_name AS usuario,
+        'RUNNING' AS status,
+        DB_NAME(r.database_id) AS databasename,
+        r.total_elapsed_time,
+        t.text AS comando
+    FROM
+        sys.dm_exec_requests r
+    INNER JOIN 
+        sys.dm_exec_sessions s ON r.session_id = s.session_id
+    CROSS APPLY 
+        sys.dm_exec_sql_text(r.sql_handle) t
+    WHERE s.login_name != 'sa'
+	  and r.session_id > 50
+      and r.total_elapsed_time >= ?
+    ORDER BY  r.total_elapsed_time DESC
+    """
+
+    # Executando a consulta e obtendo os resultados
+    cursor.execute(consulta_sql, tempo_minimo_execucao)
+    resultados = cursor.fetchall()
+
+    # Preparando o conteúdo do e-mail em HTML
+    conteudo_email = ""
+    for row in resultados:
+        spid, usuario, status, databasename, total_elapsed_time, comando = row
+        tempo_formatado = formatar_tempo(total_elapsed_time)
+        conteudo_email += f"<tr><td>{spid}</td><td>{usuario}</td><td>{status}</td><td>{databasename}</td><td>{tempo_formatado}</td><td>{comando}</td></tr>"
+
+    # Enviar e-mail se houver consultas em execução
+    if len(resultados) > 0:
+        enviar_email_corpo(conteudo_email)
+
+    # Fechando a conexão
+    conn.close()
+
+if __name__ == "__main__":
+    monitorar_consultas()

@@ -1,0 +1,130 @@
+import pyodbc
+import pandas as pd
+from datetime import datetime, timedelta
+import smtplib
+from email.mime.multipart import MIMEMultipart
+from email.mime.text import MIMEText
+from email.mime.application import MIMEApplication
+import math  
+
+# Configurações do SQL Server
+server = 'wolverine'
+database = 'Data_Science'
+username = 'python'
+password = 'python@sql'
+
+# Configurações do email
+smtp_server = 'smtp.office365.com'
+smtp_port = 587
+email_usuario = 'kaike1010@hotmail.com.br'
+email_senha = 'Deus@trino12'
+email_destinatarios = ['datascience@atmatec.com.br', 'emilly.lima@atmatec.com.br','planning@atmatec.com.br']
+
+# Conexão ao SQL Server
+conn = pyodbc.connect(f'DRIVER=SQL Server;SERVER={server};DATABASE={database};UID={username};PWD={password}')
+cursor = conn.cursor()
+
+# Consulta na tabela Tb_Ds_Robo_Boletagem_Caedu
+query = "Select * From Tb_Ds_Robo_Boletagem_Caedu_Entrada_D0"
+result = pd.read_sql(query, conn)
+
+# Número máximo de linhas por arquivo
+linhas_por_arquivo = 50
+
+# Divide os dados em partes com base no número de linhas desejado
+num_partes = math.ceil(len(result) / linhas_por_arquivo)
+chunks = [result.iloc[i:i + linhas_por_arquivo] for i in range(0, len(result), linhas_por_arquivo)]
+
+# Criação dos arquivos TXT
+data_atual = datetime.now().strftime('%Y%m%d')
+for i, chunk in enumerate(chunks):
+    numero_arquivo = i + 1
+    nome_arquivo = f'BoletagemCaeduD0{data_atual}_{numero_arquivo}.txt'
+    chunk.to_csv(nome_arquivo, sep=',', index=False, header=False)  # Remover cabeçalho
+
+# Configuração do email
+msg = MIMEMultipart()
+msg['From'] = email_usuario
+msg['To'] = ', '.join(email_destinatarios)
+msg['Subject'] = 'Robô Boletagem - Caedu Entrada D0'
+
+# Corpo do email
+data_hora = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+body = f"""
+<!DOCTYPE html>
+<html>
+<head>
+    <style>
+        body {{
+            font-family: 'Arial', sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: #f9f9f9;
+        }}
+        .container {{
+            width: 80%;
+            margin: 20px auto;
+            background-color: #ffffff;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+        }}
+        .header {{
+            text-align: center;
+            margin-bottom: 20px;
+        }}
+        .content {{
+            line-height: 1.6;
+            color: #333;
+        }}
+        .footer {{
+            margin-top: 20px;
+            text-align: center;
+            color: #888;
+        }}
+        p.alert {{
+            background-color: #e44d26;
+            color: #ffffff;
+            padding: 10px;
+            border-radius: 5px;
+        }}
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <p class="alert">Atenção: Este é um e-mail automatizado.</p>
+            <p style="color: #333; font-size: 24px;">Olá Marcelly e Emilly, tudo bem?</p>
+        </div>
+        <div class="content">
+            <p>Segue em anexo casos cujo saldo é menor a R$ 500,00.</p>
+        </div>
+        <div class="footer">
+            <p>Atenciosamente,</p>
+        </div>
+    </div>
+</body>
+</html>
+"""
+
+msg.attach(MIMEText(body, 'html'))
+
+# Anexa os arquivos TXT ao email
+for i in range(len(chunks)):
+    numero_arquivo = i + 1
+    nome_arquivo = f'BoletagemD0Caedu{data_atual}_{numero_arquivo}.txt'
+    with open(nome_arquivo, 'rb') as file:
+        attach = MIMEApplication(file.read(), _subtype='txt')  # Mantido o subtype como txt
+        attach.add_header('Content-Disposition', 'attachment', filename=nome_arquivo)
+        msg.attach(attach)
+
+# Conexão e envio do email
+with smtplib.SMTP(smtp_server, smtp_port) as server:
+    server.starttls()
+    server.login(email_usuario, email_senha)
+    server.sendmail(email_usuario, email_destinatarios, msg.as_string())
+
+# Fechar conexão com o banco de dados
+conn.close()
+
+print("Email enviado com sucesso!")

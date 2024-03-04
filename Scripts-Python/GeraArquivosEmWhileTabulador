@@ -1,0 +1,86 @@
+import pyodbc
+import pandas as pd
+import time
+from datetime import datetime, timedelta
+import re
+import unicodedata  # Importe o módulo unicodedata
+
+# Função para exibir o tempo de execução de cada step
+def exibir_tempo_execucao(step_name, start_time, end_time):
+    elapsed_time = end_time - start_time
+    print(f"Tempo de execução do step '{step_name}': {elapsed_time:.2f} segundos")
+
+# String de Conexão com o Banco de Dados
+conexao_str = "DRIVER={SQL Server};SERVER=wolverine.atmatec.com.br;DATABASE=Data_Science;UID=python;PWD=python@sql"
+
+# Obter a data mínima e máxima na tabela
+with pyodbc.connect(conexao_str) as conexao:
+    query_min_max_dates = '''
+        SELECT MIN(CAST(Data_Atendimento AS DATE)) AS MinDate, MAX(CAST(Data_Atendimento AS DATE)) AS MaxDate
+        FROM DW_MetalFrio.Dbo.Tb_Ds_Dados_Tabulador_MetalFrio
+    '''
+    min_max_dates = pd.read_sql_query(query_min_max_dates, conexao)
+
+# Converter para objetos de data
+data_minima = datetime.strptime(str(min_max_dates['MinDate'].iloc[0]), '%Y-%m-%d').date()
+data_maxima = datetime.strptime(str(min_max_dates['MaxDate'].iloc[0]), '%Y-%m-%d').date()
+
+# Inicializar a data_atual como um objeto datetime
+data_atual = data_minima
+
+# Loop entre a data mínima e a data máxima
+while data_atual <= data_maxima:
+    try:
+        # Calcular a data de um dia atrás (d-1)
+        data_alvo = data_atual
+
+        # Medir o tempo de início da conexão com o banco de dados
+        inicio_conexao = time.time()
+
+        # Conexão com o banco de dados SQL Server
+        with pyodbc.connect(conexao_str) as conexao:
+            # Medir o tempo de término da conexão com o banco de dados
+            fim_conexao = time.time()
+            exibir_tempo_execucao("Conexão com o banco de dados", inicio_conexao, fim_conexao)
+
+            # Consulta SQL na tabela especificada com a cláusula WHERE utilizando a data desejada
+            query = f'''
+                Select *
+                From DW_MetalFrio.Dbo.Tb_Ds_Dados_Tabulador_MetalFrio
+                Where Data_Atendimento = '{data_alvo.strftime('%Y-%m-%d')}'
+            '''
+
+            # Medir o tempo de início da execução da consulta SQL
+            inicio_consulta = time.time()
+
+            # Executando a consulta
+            dadosSQL = pd.read_sql_query(query, conexao)
+
+            # Remover acentos e caracteres especiais da coluna "Observação"
+            dadosSQL['OBSERVACAO'] = dadosSQL['OBSERVACAO'].apply(lambda x: re.sub(r'[^a-zA-Z0-9\s]', '', unicodedata.normalize('NFKD', str(x))))
+
+            # Medir o tempo de término da execução da consulta SQL
+            fim_consulta = time.time()
+            exibir_tempo_execucao("Execução da consulta SQL", inicio_consulta, fim_consulta)
+
+        # Criar um nome para o arquivo concatenando "AAAAMMDD_HHMMSS_TPCALLFLEXFILA" com a data e hora
+        data_formatada = data_atual.strftime('%H%M%S_TABULADOR')
+        nome_arquivo = f"{data_alvo.strftime('%Y%m%d')}_{data_formatada}.csv"
+
+        # Medir o tempo de início da exportação para arquivo CSV
+        inicio_exportacao = time.time()
+
+        # Exportar DataFrame para um arquivo CSV
+        dadosSQL.to_csv(nome_arquivo, index=False, encoding='utf-8')
+
+        # Medir o tempo de término da exportação para arquivo CSV
+        fim_exportacao = time.time()
+        exibir_tempo_execucao("Exportação para arquivo CSV", inicio_exportacao, fim_exportacao)
+
+        print(f"Arquivo {nome_arquivo} exportado com sucesso!")
+
+    except Exception as e:
+        print(f"Erro ao processar a data {data_alvo}: {e}")
+
+    # Incrementar a data atual para o próximo dia
+    data_atual += timedelta(days=1)

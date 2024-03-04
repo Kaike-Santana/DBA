@@ -1,0 +1,18 @@
+import pymssql as sql
+import pandas  as pd
+from datetime import datetime, timedelta
+
+data_ontem = (datetime.now() - timedelta(days=1)).strftime('%Y-%m-%d')
+
+# Conexão com o banco de dados SQL Server
+with sql.connect(server='wolverine.atmatec.com.br', user='dba', password='dba@atma', database='reports') as conexao:
+    # Realiza a consulta SQL e armazena o resultado em um DataFrame
+    dadosSQL = pd.read_sql_query('select top 10 * from tb_ds_arquivo_retorno_solfacil', conexao)
+
+# Fechamento da conexão automaticamente após a saída do bloco 'with'
+    
+# Exibe o shape (tamanho) do DataFrame
+print("Tamanho dos dados:", dadosSQL.shape)
+
+# Exibe as primeiras linhas do DataFrame
+print(dadosSQL.head())

@@ -1,0 +1,96 @@
+import os
+from datetime import datetime, timedelta  # Importe timedelta
+import pandas as pd
+from glob import glob
+import pyodbc
+
+# Data Atual
+data_now = datetime.now()
+data = data_now.strftime('%d%m%Y_%H%M%S')
+print(data_now)
+print(data)
+
+# Especificar o diretório de origem dos arquivos
+diretorio_origem = r'\\atlantida\MIS\00.RelatoriosMIS\SolFacil\04.Avulso\PAGAMENTOS'
+
+# Especificar o diretório de destino para o arquivo consolidado
+diretorio_destino = r'\\10.251.1.64\NectarServices\Nectar\Solfácil\Backup\Carga\Pgto_Parcela_Acordo_-_SolFacil'
+
+# Configuração da conexão ao SQL Server
+server = "wolverine"
+database = "data_science"
+username = "python"
+password = "python@sql"
+
+# Conexão ao SQL Server
+try:
+    conn = pyodbc.connect(f"Driver={{SQL Server}};Server={server};Database={database};UID={username};PWD={password}")
+except Exception as e:
+    print(f"Erro ao conectar ao banco de dados: {e}")
+    exit()
+
+# Definir a flag para identificar os arquivos
+flag = '2024'
+
+# Lista para armazenar os DataFrames de cada arquivo
+dfs = []
+
+# Gerar log
+log_file = open(os.path.join(diretorio_destino, "log_consolidacao_pagamentos_" + data + ".txt"), "w")
+log_file.write("Início da Consolidação - " + data + "\n")
+
+# Iterar sobre os arquivos no diretório de origem
+for arquivo in os.listdir(diretorio_origem):
+    if pd.Series(arquivo).str.contains(flag).any() and arquivo.endswith(".csv"):
+        caminho_arquivo = os.path.join(diretorio_origem, arquivo)
+        
+        # Ler o conteúdo do arquivo para um DataFrame
+        try:
+            df = pd.read_csv(caminho_arquivo, delimiter=';')  # Altere o delimitador conforme necessário
+        except Exception as e:
+            log_file.write(f"Erro ao ler arquivo {arquivo}: {e}\n")
+            continue
+        
+        # Adicionar uma coluna com o nome do arquivo
+        df['ARQUIVO'] = os.path.splitext(arquivo)[0]
+        
+        dfs.append(df)
+
+# Concatenar os DataFrames em um único DataFrame
+df_consolidado = pd.concat(dfs, ignore_index=True)
+
+# Selecionar as colunas desejadas
+df_final = df_consolidado[['ID', 'Fundo', 'Parcela', 'DiasAtraso', 'ValorPagamento', 'DataPagamentoBoleto']]
+
+# Corrigir formatação da coluna ValorPagamento
+try:
+    df_final.loc[:, 'ValorPagamento'] = df_final.loc[:, 'ValorPagamento'].str.replace(',','.')
+    df_final.loc[:, 'ValorPagamento'] = df_final.loc[:, 'ValorPagamento'].astype('float')
+except Exception as e:
+    log_file.write(f"Erro ao converter coluna ValorPagamento: {e}\n")
+
+# Gerar nome do arquivo de destino
+nome_planilha = 'PAGAMENTOS_' + flag + '.xlsx'
+
+# Salvar o DataFrame consolidado em um arquivo Excel
+try:
+    df_final.to_excel(os.path.join(diretorio_destino, nome_planilha), index=False)
+except Exception as e:
+    log_file.write(f"Erro ao salvar arquivo Excel: {e}\n")
+
+# Truncate Table
+try:
+    cursor = conn.cursor()
+    cursor.execute("truncate table TB_DS_PAGAMENTOS_SOLFACIL")
+except Exception as e:
+    log_file.write(f"Erro ao executar truncate table: {e}\n")
+
+# Inserir dados na tabela
+try:
+    for i in range(df_final.shape[0]):
+         cursor.execute("""
+            INSERT INTO TB_DS_PAGAMENTOS_SOLFACIL (
+                ID, Fundo, Parcela, DiasAtraso, ValorPagamento, DataPagamentoBoleto
+            ) VALUES (?, ?, ?, ?, ?, ?)
+        """
+        , (df_final.iloc[i, 0], df_final.iloc[i, 1], df_final.iloc[i, 2], df_final.iloc[i, 3], df_final.iloc[i, 4], df_final.iloc[i, 5]))

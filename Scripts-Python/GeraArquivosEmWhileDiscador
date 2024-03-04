@@ -1,0 +1,65 @@
+import os
+import pyodbc
+import pandas as pd
+from datetime import datetime, timedelta
+
+# Função para exibir o tempo de execução de cada step
+def exibir_tempo_execucao(step_name, start_time, end_time):
+    elapsed_time = end_time - start_time
+    print(f"Tempo de execução do step '{step_name}': {elapsed_time:.2f} segundos")
+
+# Caminho local para salvar os arquivos (caminho relativo)
+caminho_local = r'C:\Users\kaike.santana\Downloads'
+
+# String de Conexão com o Banco de Dados
+conexao_str = "DRIVER={SQL Server};SERVER=wolverine.atmatec.com.br;DATABASE=Data_Science;UID=python;PWD=python@sql"
+
+# Obter a data mínima e máxima na tabela
+with pyodbc.connect(conexao_str) as conexao:
+    query_min_max_dates = '''
+        SELECT MIN(CAST(Data AS DATE)) AS MinDate, MAX(CAST(Data AS DATE)) AS MaxDate
+        FROM Data_Science.Dbo.TB_DS_CALLFLEX_METALFRIO_FULL_FINAL
+    '''
+    min_max_dates = pd.read_sql_query(query_min_max_dates, conexao)
+
+# Converter para objetos de data
+data_minima = datetime.strptime(str(min_max_dates['MinDate'].iloc[0]), '%Y-%m-%d').date()
+data_maxima = datetime.strptime(str(min_max_dates['MaxDate'].iloc[0]), '%Y-%m-%d').date()
+
+# Inicializar a data_atual como um objeto datetime
+data_atual = datetime.combine(data_minima, datetime.min.time())
+
+# Loop entre a data mínima e a data máxima
+while data_atual.date() <= data_maxima:
+    try:
+        # Formatar a data diretamente na string da consulta
+        data_formatada = data_atual.strftime('%Y-%m-%d')
+        query = f'''
+            SELECT *
+            FROM Data_Science.Dbo.TB_DS_CALLFLEX_METALFRIO_FULL_FINAL
+            WHERE Data = '{data_formatada}'
+        '''
+        print(f"Tentando processar a data {data_formatada}...")
+
+        # Consultar dados para a data atual
+        with pyodbc.connect(conexao_str) as conexao:
+            dadosSQL = pd.read_sql_query(query, conexao)
+
+        if not dadosSQL.empty:
+           # Formatar o nome do arquivo
+            nome_arquivo = f"{data_atual.strftime('%Y%m%d_')}{datetime.now().strftime('%H%M%S')}_TPCALLFLEXFILA.csv"
+
+           # Exportar DataFrame para um arquivo CSV local
+            caminho_arquivo_local = os.path.join(caminho_local, nome_arquivo)
+            dadosSQL.to_csv(caminho_arquivo_local, index=False, encoding='utf-8')
+            print(f"Arquivo {nome_arquivo} exportado localmente com sucesso!")
+        else:
+            print(f"Nenhum dado encontrado para a data {data_formatada}")
+
+    except Exception as e:
+        print(f"Erro ao processar a data {data_formatada}: {e}")
+
+    # Incrementar a data atual para o próximo dia
+    data_atual += timedelta(days=1)
+
+print("Exportação local concluída. Transfira os arquivos manualmente via SFTP para o servidor.")

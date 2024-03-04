@@ -1,0 +1,73 @@
+#::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::*/
+# PROGRAMADOR: KAIKE NATAN									                                   */
+# VERSAO     : DATA: 24/07/2023																   */
+# DESCRICAO  : RESPONSÁVEL POR EXPORTAR O DUMP DE ACIONAMENTOS DA SOLFACIL VIA SFTP			   */
+#																							   */
+# ALTERACAO                                                                                    */
+#        2. PROGRAMADOR: 													 DATA: __/__/____  */		
+#           DESCRICAO:															  			   */
+#::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::*/
+
+import pyodbc
+import pandas as pd
+from datetime import datetime, timedelta
+import paramiko
+from paramiko import SSHClient, AutoAddPolicy
+
+# String De Conexao com Banco de Dados
+conexao_str = "DRIVER={SQL Server};SERVER=wolverine.atmatec.com.br;DATABASE=reports;UID=python;PWD=python@sql"
+
+# Obter a data atual
+hoje = datetime.now().date()
+
+# Solicitar ao usuário que insira a data desejada
+if hoje.weekday() == 0:  # Segunda-feira
+    # Calcular a data de dois dias atrás (d-2)
+    data_alvo = hoje - timedelta(days=2)
+else:
+    # Caso contrário, calcular a data de um dia atrás (d-1)
+    data_alvo = hoje - timedelta(days=1)
+
+# Solicitar ao usuário que insira a data desejada
+data_desejada = data_alvo
+
+# Conexão com o banco de dados SQL Server
+with pyodbc.connect(conexao_str) as conexao:
+    # Consulta SQL com a cláusula WHERE utilizando a data desejada
+    query = f"select fundo,id,documento_cliente as cpf,nome_cliente,finalizacao,data,hora,tma,usuario as operador,vencimento_boleto,motivo_atraso,valor_acordo,telefone,funcionamento_das_placas,data as atualizacao,codigo_acessoria as codigo_assessoria,tipo_acionamento from tb_ds_arquivo_retorno_solfacil where data = '{data_desejada}'"
+
+    # Executando a consulta
+    dadosSQL = pd.read_sql_query(query, conexao)
+
+# Exibe o Tamanho Dos Dados
+#print("Tamanho dos dados:", dadosSQL.shape)
+
+# Exibe As Primeiras Linhas Dos Dados
+#print(dadosSQL.head())
+
+# Criar um nome para o arquivo concatenando "Arquivo_Retorno_Solfacil_" com a data
+data_formatada = data_desejada.strftime('%Y%m%d')
+nome_arquivo = f"Arquivo_Retorno_Solfacil_{data_formatada}.csv"  # Change file extension to .csv
+
+# Exportar DataFrame para um arquivo CSV (UTF-8 encoded)
+dadosSQL.to_csv(nome_arquivo, index=False, sep=';', encoding='utf-8')
+
+# Solicitar ao usuário que insira as informações do servidor SFTP
+endereco_sftp = ("sftp.atmatec.com.br")
+usuario_sftp = ("solfacil")
+senha_sftp = ("^*n4Bm%qja9L")
+caminho_sftp = ("./_RETORNO/")
+
+# Conexão SSH com o servidor SFTP
+client = SSHClient()
+client.set_missing_host_key_policy(AutoAddPolicy())
+client.connect(endereco_sftp, username=usuario_sftp, password=senha_sftp)
+
+# Envio do arquivo via SFTP
+with client.open_sftp() as sftp:
+    sftp.put(nome_arquivo, f"{caminho_sftp}/{nome_arquivo}")
+
+print(f"Arquivo {nome_arquivo} enviado para o servidor SFTP com sucesso!")
+
+# Desconectar o cliente SSH
+client.close()

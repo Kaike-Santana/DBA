@@ -1,0 +1,87 @@
+import pyodbc
+import pandas as pd
+import time
+from datetime import datetime, timedelta
+import paramiko
+from paramiko import SSHClient, AutoAddPolicy
+
+# Função para exibir o tempo de execução de cada step
+def exibir_tempo_execucao(step_name, start_time, end_time):
+    elapsed_time = end_time - start_time
+    print(f"Tempo de execução do step '{step_name}': {elapsed_time:.2f} segundos")
+
+# String De Conexao com Banco de Dados
+conexao_str = "DRIVER={SQL Server};SERVER=wolverine.atmatec.com.br;DATABASE=reports;UID=python;PWD=python@sql"
+
+# Obter as datas de início (data1) e fim (data2) a partir do usuário
+data1_str = input("Insira a data inicial (YYYY-MM-DD): ")
+data2_str = input("Insira a data final (YYYY-MM-DD): ")
+data1 = datetime.strptime(data1_str, '%Y-%m-%d')
+data2 = datetime.strptime(data2_str, '%Y-%m-%d')
+
+# Medir o tempo de início da conexão com o banco de dados
+inicio_conexao = time.time()
+
+# Inicializar a conexão com o banco de dados SQL Server
+with pyodbc.connect(conexao_str) as conexao:
+
+    # Medir o tempo de término da conexão com o banco de dados
+    fim_conexao = time.time()
+    exibir_tempo_execucao("Conexão com o banco de dados", inicio_conexao, fim_conexao)
+
+    # Loop entre as datas fornecidas pelo usuário
+    data_alvo = data1
+    while data_alvo <= data2:
+    # Consulta SQL com a cláusula WHERE utilizando a data desejada
+        query = f'''
+          select cod_assessoria, periodo, primeiro_login, ultimo_logout, usuario, regime, data_admissao, carga_horaria, ttl, tto, ttpnr, ttpe, ttt, tta, tmd, tmt, tma, [atendidas ativo] as atendidas_ativo, [atendidas receptivo] as atendidas_receptivo, data_origem_processamento
+        from reports.dbo.tb_ds_renner_dump_tempos
+            where data = '{data_alvo.strftime('%Y-%m-%d')}'
+        '''
+        # Medir o tempo de início da execução da consulta SQL
+        inicio_consulta = time.time()
+
+        # Executando a consulta
+        dadosSQL = pd.read_sql_query(query, conexao)
+
+        # Medir o tempo de término da execução da consulta SQL
+        fim_consulta = time.time()
+        exibir_tempo_execucao("Execução da consulta SQL", inicio_consulta, fim_consulta)
+
+        # Criar um nome para o arquivo concatenando "Arquivo_Retorno_Solfacil_" com a data e hora
+        data_formatada = data_alvo.strftime('%Y%m%d')
+        nome_arquivo = f"TEMPOS_OPERACIONAIS_{data_formatada}_ATM.txt"
+
+        # Medir o tempo de início da exportação para arquivo de texto
+        inicio_exportacao = time.time()
+
+        # Exportar DataFrame para um arquivo de texto com o separador ;
+        dadosSQL.to_csv(nome_arquivo, index=False, sep=';', encoding='utf-8')
+
+        # Medir o tempo de término da exportação para arquivo de texto
+        fim_exportacao = time.time()
+        exibir_tempo_execucao("Exportação para arquivo de texto", inicio_exportacao, fim_exportacao)
+        print(f"Arquivo {nome_arquivo} exportado com sucesso!")
+
+        # Solicitar ao usuário que insira as informações do servidor SFTP
+        endereco_sftp = "sftp.atmatec.com.br"
+        usuario_sftp = "renner"
+        senha_sftp = "!ZQcKjagCnoY!"
+        caminho_sftp = "/Out/Tempos_Operacionais"
+ 
+        # Conexão SSH com o servidor SFTP
+        client = SSHClient()
+        client.set_missing_host_key_policy(AutoAddPolicy())
+        client.connect(endereco_sftp, username=usuario_sftp, password=senha_sftp)
+
+
+        # Envio do arquivo via SFTP
+        with client.open_sftp() as sftp:
+            sftp.put(nome_arquivo, f"{caminho_sftp}/{nome_arquivo}")
+        print(f"Arquivo {nome_arquivo} enviado para o servidor SFTP com sucesso!")
+
+        # Desconectar o cliente SSH
+        client.close()
+
+        # Avançar para a próxima data
+        data_alvo += timedelta(days=1)

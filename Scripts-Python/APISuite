@@ -1,0 +1,16 @@
+import swagger_client
+from swagger_client.rest import ApiException
+from pprint import pprint
+
+# Criar instância da classe de API
+api_instance = swagger_client.DefaultApi()
+
+# Definir as credenciais do usuário
+body = swagger_client.Body(key_id="SEU_KEY_ID", key_secret="SUA_CHAVE_SECRETA")
+
+try:
+    # Autenticação e geração de token
+    api_response = api_instance.auth_login_post(body)
+    pprint(api_response)
+except ApiException as e:
+    print("Exception when calling DefaultApi->authLoginPost: %s\n" % e)

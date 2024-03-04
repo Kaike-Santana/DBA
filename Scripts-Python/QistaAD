@@ -1,0 +1,171 @@
+import pyodbc
+import os
+import datetime
+import ftplib
+import smtplib
+from email.mime.multipart import MIMEMultipart
+from email.mime.text import MIMEText
+from email.utils import formatdate
+
+# Configurações do SQL Server
+server = 'polaris'
+database = 'Planning'
+username = 'cmd'
+password = 'sql@cmd'
+
+# Conexão ao SQL Server
+conn = pyodbc.connect(f'DRIVER=SQL Server;SERVER={server};DATABASE={database};UID={username};PWD={password}')
+cursor = conn.cursor()
+
+# Consulta SQL para obter os dados da view
+query = 'Select * From Tb_Mailing_Layout_Unico_Ad_Qista'  # Alteração aqui para a tabela desejada
+cursor.execute(query)
+data = cursor.fetchall()
+
+# Obter os nomes das colunas da consulta
+column_names = [column[0] for column in cursor.description]
+
+# Sem verificação incremental ou full, definir sempre como _FULL no nome do arquivo final
+file_suffix = '_FULL'
+
+# Fechando a conexão com o SQL Server
+conn.close()
+
+# Nome do arquivo base (data atual)
+current_datetime = datetime.datetime.now()
+formatted_datetime = current_datetime.strftime('%Y%m%d_%H%M%S')
+filename_base = f'{formatted_datetime}_79{file_suffix}.txt'
+
+# Exportar os dados para um arquivo de texto .txt com delimitador ponto e vírgula
+output_filename = os.path.join(filename_base)
+with open(output_filename, 'w', newline='', encoding='utf-8') as f:
+    # Escrever o cabeçalho no arquivo
+    header_line = ';'.join(column_names)
+    f.write(header_line + '\n')
+
+    # Escrever os dados no arquivo
+    for row in data:
+        line = ';'.join(map(str, row))
+        f.write(line + '\n')
+
+print("Exportação concluída.")
+
+# Configurações do servidor FTP
+ftp_server = '10.251.3.22'
+ftp_username = 'atmspb'
+ftp_password = 'db718b7215e1'
+ftp_directory = '/callflex/importar/'
+
+# Nome do arquivo a ser enviado
+remote_filename = filename_base
+
+# Caminho completo para o arquivo local
+local_file_path = output_filename
+
+# Estabelecer conexão FTP
+ftp = ftplib.FTP(ftp_server)
+ftp.login(ftp_username, ftp_password)
+
+# Mover para o diretório remoto
+ftp.cwd(ftp_directory)
+
+# Enviar o arquivo
+with open(local_file_path, 'rb') as file:
+    ftp.storbinary(f'STOR {remote_filename}', file)
+
+# Fechar a conexão FTP
+ftp.quit()
+
+print("Arquivo Enviado via FTP para o WinSCP.")
+
+# Configurações do servidor de e-mail
+smtp_server = 'smtp.office365.com'
+smtp_port = 587
+email_usuario = 'kaike1010@hotmail.com.br'
+email_senha = 'Deus@trino12'
+email_destinatarios = ['datascience@atmatec.com.br','clevson.morais@atmatec.com.br','controldesk@atmatec.com.br']
+
+# Configurar a mensagem de e-mail
+subject = "Mailing Layout Único AD Qista Exportado para o CallFlex"
+body = """
+<!DOCTYPE html>
+<html>
+<head>
+    <style>
+        body {{
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+        }}
+        .container {{
+            background-color: #f4f4f4;
+            padding: 20px;
+            border-radius: 10px;
+            margin: 50px auto;
+            width: 70%;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+        }}
+        .header {{
+            background-color: #007BFF;
+            color: #fff;
+            padding: 10px;
+            border-radius: 10px 10px 0 0;
+            text-align: center;
+        }}
+        .content {{
+            padding: 20px;
+        }}
+        .footer {{
+            background-color: #f4f4f4;
+            padding: 10px;
+            border-radius: 0 0 10px 10px;
+            text-align: center;
+        }}
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>Mailing Layout Único AD Qista</h1>
+        </div>
+        <div class="content">
+            <p>Prezados,</p>
+            <p>Gostaria de informar que o Mailing Layout Único AD Qista foi exportado com sucesso para o CallFlex.</p>
+            <p>Detalhes da exportação:</p>
+            <ul>
+                <li><strong>Data e Hora:</strong> {data_hora}</li>
+                <li><strong>Nome do Arquivo:</strong> {nome_arquivo}</li>
+            </ul>
+            <p>Atenciosamente,</p>
+        </div>
+        <div class="footer">
+            <p>Este é um e-mail automatizado. Por favor, não responda a este e-mail.</p>
+        </div>
+    </div>
+</body>
+</html>
+"""
+
+# Substitui as variáveis no corpo do e-mail
+current_datetime = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+nome_arquivo = filename_base
+body = body.format(data_hora=current_datetime, nome_arquivo=nome_arquivo)
+
+# Configurar a mensagem de e-mail
+msg = MIMEMultipart()
+msg['From'] = email_usuario
+msg['To'] = ', '.join(email_destinatarios)
+msg['Subject'] = subject
+msg['Date'] = formatdate(localtime=True)
+msg.attach(MIMEText(body, 'html'))
+
+# Enviar e-mail usando SMTP
+try:
+    server = smtplib.SMTP(smtp_server, smtp_port)
+    server.starttls()
+    server.login(email_usuario, email_senha)
+    server.sendmail(email_usuario, email_destinatarios, msg.as_string())
+    server.quit()
+    print("E-mail enviado com sucesso!")
+except Exception as e:
+    print("Erro ao enviar e-mail:", e)

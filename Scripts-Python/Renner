@@ -1,0 +1,160 @@
+import pyodbc
+import smtplib
+from email.mime.multipart import MIMEMultipart
+from email.mime.text import MIMEText
+from email.mime.application import MIMEApplication
+from datetime import datetime, timedelta
+
+# Variável de Controle com o Projeto a ser Executado
+vCarteira = 'Renner'
+
+# Configurações do SQL Server
+server = 'wolverine'
+database = 'Data_Science'
+username = 'python'
+password = 'python@sql'
+
+# Configurações do email
+smtp_server = 'smtp.office365.com'
+smtp_port = 587
+email_usuario = 'kaike1010@hotmail.com.br'
+email_senha = 'Deus@trino12'
+email_destinatarios = ['datascience@atmatec.com.br','qualidade@atmatec.com.br','planning@atmatec.com.br']
+
+# Conexão ao SQL Server
+conn = pyodbc.connect(f'DRIVER=SQL Server;SERVER={server};DATABASE={database};UID={username};PWD={password}')
+cursor = conn.cursor()
+
+# Consulta na primeira tabela
+cursor.execute("""
+    SELECT MediaEscrita
+    FROM Tb_Ds_Dimensao_Media_TempoFalando
+    WHERE Carteira = ?
+""", (vCarteira,))
+
+media_escrita = cursor.fetchone()[0]
+
+# Consulta na segunda tabela
+cursor.execute("""
+Select
+  [Id_Chamada]
+, [Data]
+, [Hora]
+, [Ddd]
+, [Telefone]
+, [Identificado_Crm]
+, [Cpf_CLiente]
+, [Id_CallFlexOp]
+, [Nome_Operador]
+, [CpfOperador]
+, [Fila]
+, [Tempo_Conversado]
+, [Duracao_Chamada]
+, [DesligadoPor]
+, [Tabulacao]
+, [Carteira]
+From Tb_Ds_Projeto_Robo_Monitoria
+Where Carteira = ?
+""", (vCarteira,)
+)
+
+result_set = cursor.fetchall()
+
+# Criação do arquivo TXT com cabeçalho e nome dinâmico
+data_atual = datetime.now() - timedelta(days=1)
+nome_arquivo = f'RennerMonitoria{data_atual.strftime("%Y%m%d")}.txt'
+
+# Obtenha os nomes das colunas (cabeçalho) a partir do cursor.description
+colunas = [column[0] for column in cursor.description]
+
+with open(nome_arquivo, 'w') as file:
+    # Escreva o cabeçalho no arquivo
+    file.write('\t'.join(colunas) + '\n')
+
+    # Escreva os dados no arquivo
+    for row in result_set:
+        file.write('\t'.join(map(str, row)) + '\n')
+
+# Configuração do email
+msg = MIMEMultipart()
+msg['From'] = email_usuario
+msg['To'] = ', '.join(email_destinatarios)
+msg['Subject'] = f'Robô Monitoria - Renner'
+
+# Corpo do email
+data_hora = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+body = f"""
+<!DOCTYPE html>
+<html>
+<head>
+    <style>
+        /* Adicione estilos CSS aqui */
+        body {{
+            font-family: 'Arial', sans-serif;
+            margin: 0;
+            padding: 0;
+        }}
+        .container {{
+            width: 80%;
+            margin: 20px auto;
+            background-color: #f4f4f4;
+            padding: 20px;
+            border-radius: 10px;
+        }}
+        .header {{
+            text-align: center;
+            margin-bottom: 20px;
+        }}
+        .content {{
+            line-height: 1.6;
+        }}
+        .footer {{
+            margin-top: 20px;
+            text-align: center;
+            color: #888;
+        }}
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <!-- Remova o título -->
+        </div>
+        <div class="content">
+            <p>Olá Time de Monitoria/Qualidade,</p>
+            <p>Tudo bem com vocês?</p>
+            <p>Segue em anexo os casos de ligação que estão com um desvio padrão de 80% sobre a média das ligações, havendo grandes possibilidades desses atendimentos não seguirem o script desenhado por vocês.</p>
+            <p>Detalhes da exportação:</p>
+            <ul>
+                <li><strong>Data e Hora:</strong> {data_hora}</li>
+                <li><strong>Nome do Arquivo:</strong> {nome_arquivo}</li>
+                <li><strong>Média:</strong> {media_escrita} na Renner</li>
+            </ul>
+            <p>Atenciosamente,</p>
+        </div>
+        <div class="footer">
+            <p>Este é um e-mail automatizado. Por favor, não responda a este e-mail.</p>
+        </div>
+    </div>
+</body>
+</html>
+"""
+
+msg.attach(MIMEText(body, 'html'))
+
+# Anexa o arquivo TXT ao email
+with open(nome_arquivo, 'rb') as file:
+    attach = MIMEApplication(file.read(), _subtype='txt')
+    attach.add_header('Content-Disposition', 'attachment', filename=nome_arquivo)
+    msg.attach(attach)
+
+# Conexão e envio do email
+with smtplib.SMTP(smtp_server, smtp_port) as server:
+    server.starttls()
+    server.login(email_usuario, email_senha)
+    server.sendmail(email_usuario, email_destinatarios, msg.as_string())
+
+# Fechar conexão com o banco de dados
+conn.close()
+
+print("Email enviado com sucesso!")

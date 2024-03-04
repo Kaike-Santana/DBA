@@ -1,0 +1,86 @@
+import pyodbc
+import pandas as pd
+import time
+from datetime import datetime, timedelta
+import paramiko
+from paramiko import SSHClient, AutoAddPolicy
+
+# Função para exibir o tempo de execução de cada step
+def exibir_tempo_execucao(step_name, start_time, end_time):
+    elapsed_time = end_time - start_time
+    print(f"Tempo de execução do step '{step_name}': {elapsed_time:.2f} segundos")
+
+# String De Conexao com Banco de Dados
+conexao_str = "DRIVER={SQL Server};SERVER=wolverine.atmatec.com.br;DATABASE=reports;UID=python;PWD=python@sql"
+
+# Obter a data atual
+hoje = datetime.now().date()
+
+# Verificar se hoje é segunda-feira (0 representa segunda-feira, 1 é terça-feira, e assim por diante)
+if hoje.weekday() == 0:  # Segunda-feira
+    # Calcular a data de dois dias atrás (d-2)
+    data_alvo = hoje - timedelta(days=2)
+else:
+    # Caso contrário, calcular a data de um dia atrás (d-1)
+    data_alvo = hoje - timedelta(days=1)
+
+# Solicitar ao usuário que insira a data desejada
+data_desejada = data_alvo
+
+# Medir o tempo de início da conexão com o banco de dados
+inicio_conexao = time.time()
+
+# Conexão com o banco de dados SQL Server
+with pyodbc.connect(conexao_str) as conexao:
+    # Medir o tempo de término da conexão com o banco de dados
+    fim_conexao = time.time()
+    exibir_tempo_execucao("Conexão com o banco de dados", inicio_conexao, fim_conexao)
+
+    # Consulta SQL com a cláusula WHERE utilizando a data desejada
+    query = f"SELECT COD_CREDOR,CPF,RESPONSE_DTTM,RESPONSE_CHANNEL_RESPONSE_CD,EXTERNAL_RESPONSE_INFO_ID1,EXTERNAL_RESPONSE_INFO_ID2,CHANNEL_CD,RESPONSE_TRACKING_CD,TREATMENT_TRACKING_CD,OCORRENCIA_ORIGINAL,DDD_TELEFONE,USUARIO FROM TB_DS_ARQUIVO_RETORNO_RENNER WHERE ATUALIZACAO = '{data_desejada}'"
+
+    # Medir o tempo de início da execução da consulta SQL
+    inicio_consulta = time.time()
+
+    # Executando a consulta
+    dadosSQL = pd.read_sql_query(query, conexao)
+
+    # Medir o tempo de término da execução da consulta SQL
+    fim_consulta = time.time()
+    exibir_tempo_execucao("Execução da consulta SQL", inicio_consulta, fim_consulta)
+
+# Criar um nome para o arquivo concatenando "Arquivo_Retorno_Solfacil_" com a data e hora
+data_formatada = data_desejada.strftime('%Y%m%d_%H%M%S')
+nome_arquivo = f"Response_sas_{data_formatada}_ATM.txt"
+
+# Medir o tempo de início da exportação para arquivo CSV (texto)
+inicio_exportacao = time.time()
+
+# Exportar DataFrame para um arquivo CSV (texto) com o separador ;
+dadosSQL.to_csv(nome_arquivo, index=False, sep=';')
+
+# Medir o tempo de término da exportação para arquivo CSV (texto)
+fim_exportacao = time.time()
+exibir_tempo_execucao("Exportação para arquivo CSV", inicio_exportacao, fim_exportacao)
+
+print(f"Arquivo {nome_arquivo} exportado com sucesso!")
+
+# Solicitar ao usuário que insira as informações do servidor SFTP
+endereco_sftp = "sftp.atmatec.com.br"
+usuario_sftp = "renner"
+senha_sftp = "!ZQcKjagCnoY!"
+caminho_sftp = "./Out/Response/"
+
+# Conexão SSH com o servidor SFTP
+client = SSHClient()
+client.set_missing_host_key_policy(AutoAddPolicy())
+client.connect(endereco_sftp, username=usuario_sftp, password=senha_sftp)
+
+# Envio do arquivo via SFTP
+with client.open_sftp() as sftp:
+    sftp.put(nome_arquivo, f"{caminho_sftp}/{nome_arquivo}")
+
+print(f"Arquivo {nome_arquivo} enviado para o servidor SFTP com sucesso!")
+
+# Desconectar o cliente SSH
+client.close()

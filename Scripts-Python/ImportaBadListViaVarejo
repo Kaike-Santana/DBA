@@ -1,0 +1,68 @@
+import os
+import paramiko
+import shutil
+import zipfile
+from datetime import datetime
+
+# Configurações do WinSCP
+sftp_config = {
+    'hostname': 'sentinela',
+    'port': 22,
+    'username': 'atma_sistemas',
+    'password': '@tma2023',
+    'remote_directory': '/VVAREJO/VIAVAREJO_BADLIST'
+}
+
+# Pasta na rede de destino
+network_destination_dir = r'\\polaris\NectarServices\Administrativo\Temporario\DIARIO_BLACKLIST\Historico BadList'
+
+def download_latest_zip(sftp_config, local_dir):
+    transport = paramiko.Transport((sftp_config['hostname'], sftp_config['port']))
+    transport.connect(username=sftp_config['username'], password=sftp_config['password'])
+    sftp = paramiko.SFTPClient.from_transport(transport)
+
+    latest_file = None
+    latest_mtime = datetime(1970, 1, 1)
+    for filename in sftp.listdir(sftp_config['remote_directory']):
+        filepath = os.path.join(sftp_config['remote_directory'], filename)
+        mtime = datetime.fromtimestamp(sftp.stat(filepath).st_mtime)
+        if mtime > latest_mtime and filename.endswith('.zip'):
+            latest_mtime = mtime
+            latest_file = filepath
+
+    local_zip_path = os.path.join(local_dir, os.path.basename(latest_file))
+    sftp.get(latest_file, local_zip_path)
+
+    sftp.close()
+    transport.close()
+    return local_zip_path
+
+def extract_csv_from_zip(zip_filepath, local_dir):
+    with zipfile.ZipFile(zip_filepath, 'r') as zip_ref:
+        csv_filename = None
+        for file_name in zip_ref.namelist():
+            if file_name.endswith('.csv'):
+                csv_filename = file_name
+                zip_ref.extract(file_name, local_dir)
+    return os.path.join(local_dir, csv_filename)
+
+def move_to_network(local_filepath, network_destination_dir):
+    filename = os.path.basename(local_filepath)
+    network_filepath = os.path.join(network_destination_dir, filename)
+    shutil.move(local_filepath, network_filepath)
+
+def main():
+    local_dir = 'temp'
+    os.makedirs(local_dir, exist_ok=True)
+
+    downloaded_zip_path = download_latest_zip(sftp_config, local_dir)
+    extracted_csv_path = extract_csv_from_zip(downloaded_zip_path, local_dir)
+    move_to_network(extracted_csv_path, network_destination_dir)
+
+    # Remover arquivos temporários após mover
+    os.remove(downloaded_zip_path)
+    os.remove(extracted_csv_path)
+    os.rmdir(local_dir)
+
+if __name__ == "__main__":
+    main()

@@ -1,0 +1,75 @@
+import pyodbc
+import pandas as pd
+from datetime import datetime, timedelta
+import paramiko
+from paramiko import SSHClient, AutoAddPolicy
+
+# String De Conexao com Banco de Dados
+conexao_str = "DRIVER={SQL Server};SERVER=wolverine.atmatec.com.br;DATABASE=reports;UID=python;PWD=python@sql"
+
+# Função para verificar se a data é um dia útil (segunda a sábado, excluindo domingo)
+def is_weekday(date):
+    return date.weekday() < 6  # Monday is 0 and Saturday is 5
+
+# Função para formatar a data no formato correto
+def formatar_data(data_str):
+    return datetime.strptime(data_str, '%Y-%m-%d').strftime('%Y%m%d')
+
+# Função para exportar os dados para o arquivo CSV com separador ';'
+def exportar_para_csv(dadosSQL, nome_arquivo):
+    dadosSQL.to_csv(nome_arquivo, index=False, sep=';', encoding='utf-8')
+    print(f"Arquivo {nome_arquivo} exportado com sucesso!")
+
+# Função para enviar o arquivo via SFTP
+def enviar_via_sftp(endereco_sftp, usuario_sftp, senha_sftp, caminho_sftp, nome_arquivo):
+    # Conexão SSH com o servidor SFTP
+    client = SSHClient()
+    client.set_missing_host_key_policy(AutoAddPolicy())
+    client.connect(endereco_sftp, username=usuario_sftp, password=senha_sftp)
+
+    # Envio do arquivo via SFTP
+    with client.open_sftp() as sftp:
+        sftp.put(nome_arquivo, f"{caminho_sftp}/{nome_arquivo}")
+
+    print(f"Arquivo {nome_arquivo} enviado para o servidor SFTP com sucesso!")
+
+    # Desconectar o cliente SSH
+    client.close()
+
+# Solicitar ao usuário que insira a data inicial e final desejada
+data_inicial = input("Insira a data inicial no formato AAAA-MM-DD: ")
+data_final = input("Insira a data final no formato AAAA-MM-DD: ")
+
+# Converter as datas para objetos datetime
+data_atual = datetime.strptime(data_inicial, '%Y-%m-%d')
+data_fim = datetime.strptime(data_final, '%Y-%m-%d')
+
+# Loop para processar os dados para cada dia útil (segunda a sexta-feira)
+while data_atual <= data_fim:
+    if is_weekday(data_atual):
+        # Conexão com o banco de dados SQL Server
+        with pyodbc.connect(conexao_str) as conexao:
+            # Consulta SQL com a cláusula WHERE utilizando a data atual
+            query = f"select fundo,id,documento_cliente as cpf,nome_cliente,finalizacao,data,hora,tma,usuario as operador,vencimento_boleto,motivo_atraso,valor_acordo,telefone,funcionamento_das_placas,data as atualizacao,codigo_acessoria as codigo_assessoria,tipo_acionamento from tb_ds_arquivo_retorno_solfacil where data = '{data_atual.strftime('%Y-%m-%d')}'"
+
+            # Executando a consulta
+            dadosSQL = pd.read_sql_query(query, conexao)
+
+        # Formatar a data atual para o nome do arquivo
+        data_formatada = formatar_data(data_atual.strftime('%Y-%m-%d'))
+        nome_arquivo = f"Arquivo_Retorno_Solfacil_{data_formatada}.csv"
+
+        # Exportar DataFrame para um arquivo CSV
+        exportar_para_csv(dadosSQL, nome_arquivo)
+
+        # Enviar arquivo via SFTP
+        endereco_sftp = "sftp.atmatec.com.br"
+        usuario_sftp = "solfacil"
+        senha_sftp = "^*n4Bm%qja9L"
+        caminho_sftp = "./_RETORNO/"
+        enviar_via_sftp(endereco_sftp, usuario_sftp, senha_sftp, caminho_sftp, nome_arquivo)
+
+    # Avançar para o próximo dia
+    data_atual += timedelta(days=1)
+
+print("Processo concluído!")

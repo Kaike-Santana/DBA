@@ -1,0 +1,109 @@
+import paramiko
+import os
+from datetime import datetime, timedelta  # Importe timedelta
+
+# Variável global para rastrear se já encontramos a primeira linha com código 19
+encontrou_primeiro_ponto_virgula = False
+
+# Função para tratar o arquivo
+def tratar_arquivo(linhas_arquivo_tratado, linha):
+    global encontrou_primeiro_ponto_virgula  # Defina a variável global como True dentro da função
+    # Verifica se já encontramos o primeiro ponto e vírgula (;)
+    if not encontrou_primeiro_ponto_virgula:
+        # Encontramos o primeiro ponto e vírgula (;), então agora procuramos por "19" na segunda coluna
+        colunas = linha.split(";")
+        if len(colunas) > 1 and colunas[1] == "19":
+            encontrou_primeiro_ponto_virgula = True
+    elif encontrou_primeiro_ponto_virgula:
+        # Divide a linha em colunas
+        colunas = linha.split(";")
+
+        # Remove a primeira e última coluna
+        colunas = colunas[1:-1]
+
+        # Reconstroi a linha com as colunas restantes
+        linha_tratada = ";".join(colunas)
+
+        # Adiciona a linha tratada à lista
+        linhas_arquivo_tratado.append(linha_tratada)
+
+# Configurações de conexão SFTP
+hostname = 'pravaler.zaap.net.br'
+port = 22
+username = 'atma'
+password = 'oZ38gT#20Qma'
+
+# Diretório remoto no WinSCP
+remote_directory = '/SAIDA/PROCESSADOS/'
+
+# Data do Dia Atual
+data_atual = datetime.now() 
+data_ontem = data_atual - timedelta(days=1)  # Subtrai 1 dia da data atual
+data_formatada = data_atual.strftime('%Y%m%d')  # Formato YYYYMMDD
+data_info_formatada = data_ontem.strftime('%Y-%m-%d')  # Formato YYYY-MM-DD
+
+# Crie uma conexão SSH
+transport = paramiko.Transport((hostname, port))
+transport.connect(username=username, password=password)
+sftp = paramiko.SFTPClient.from_transport(transport)
+
+try:
+    # Listar arquivos no diretório remoto
+    files = sftp.listdir(remote_directory)
+
+    # Encontrar o arquivo correspondente ao dia atual (ATMAYYYYMMDD02D.txt)
+    expected_filename = f"ATMA{data_formatada}02D.txt"
+
+    matching_file = None
+    for file in files:
+        if file == expected_filename:
+            matching_file = file
+            break
+
+    if matching_file:
+        remote_path = os.path.join(remote_directory, matching_file)
+
+        # Caminhos completos para os arquivos de saída nos diretórios de rede
+        caminho_arquivo_saida_original = '//polaris/NectarServices/Administrativo/Output/16.PraValer/ArquivosD/Arquivo_Original/' + os.path.basename(remote_path)
+        caminho_arquivo_saida_tratado = '//polaris/NectarServices/Administrativo/Output/16.PraValer/ArquivosD/Arquivo_Tratado/' + os.path.basename(remote_path)
+
+        # Salvar o arquivo original
+        sftp.get(remote_path, caminho_arquivo_saida_original)
+        print(f"Arquivo original salvo em {caminho_arquivo_saida_original}")
+
+        # Tratar o arquivo
+        linhas_tratadas = []
+        with open(caminho_arquivo_saida_original, 'r') as arquivo_entrada:
+            for linha in arquivo_entrada:
+                # Divide a linha por ponto e vírgula
+                partes = linha.strip().split(";")
+                
+                # Verifica se há pelo menos duas partes e a segunda parte (após o primeiro ponto e vírgula) é igual a "19"
+                if len(partes) >= 2 and partes[1] == '19':
+                    # Adiciona a data atual - 1 dia como a última coluna DT_INFO
+                    partes.append(data_info_formatada)
+
+                    # Adiciona a linha tratada à lista
+                    linhas_tratadas.append(';'.join(partes))
+
+        # Abre o arquivo de saída tratado para escrita
+        with open(caminho_arquivo_saida_tratado, 'w') as arquivo_saida_tratado:
+            # Adiciona o cabeçalho
+            cabecalho = "COD_CRED;COD_OPER;CPF;NOSSO NUMERO;DATA_VCTO;BANCO_DO_BOLETO;NUMERO_DE_AGENCIA_DO_CEDENTE;CONTA_DO_CEDENTE;VALOR;DATA_HORA_PROCESSAMENTO;INSTRUCAO_1;INSTRUCAO_1;INSTRUCAO_2;INSTRUCAO_3;INSTRUCAO_4;NOME_DA_CAMPANHA;UNIDADE_DE_COBRANCA;C0DIGO_DE_BARRAS;LINHA_DIGITAVEL;PARCELA_INICIAL;PARCELA_FINAL;NOSSO_NUMERO_PARA_IMPRESSAO;DATA_DO_CALCULO;INSTRUCAO_5;INSTRUCAO_6;INSTRUCAO_7;INSTRUCAO_8;FILIAL_DO_CREDOR;CHAVE_LIGACAO;DT_INFO\n"
+            arquivo_saida_tratado.write(cabecalho)
+
+            # Escreve as linhas tratadas no arquivo de saída
+            arquivo_saida_tratado.write("\n".join(linhas_tratadas))
+
+        print(f"Arquivo tratado salvo em {caminho_arquivo_saida_tratado}")
+
+    else:
+        print(f"Nenhum registro com código 19 encontrado no arquivo original.")
+
+except Exception as e:
+    print(f"Ocorreu um erro: {e}")
+
+finally:
+    # Fecha a conexão SFTP
+    sftp.close()
+    transport.close()

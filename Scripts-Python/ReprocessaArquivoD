@@ -1,0 +1,88 @@
+import paramiko
+import os
+from datetime import datetime, timedelta
+
+# Função para tratar o arquivo
+def tratar_arquivo(linhas_arquivo_tratado, linha, dt_info_str):
+    partes = linha.strip().split(';')
+    
+    if len(partes) >= 2 and partes[1] == '19':
+        # Verificar o número de colunas no arquivo
+        numero_de_colunas = len(partes)
+
+        # Verificar se a coluna dt_info existe no arquivo
+        if numero_de_colunas <= 29:
+            # Se não houver coluna dt_info, você pode adicionar como a 30ª coluna
+            partes.append(dt_info_str)  # Adicione a data no formato americano na coluna DT_INFO (30ª coluna)
+        else:
+            # Se a coluna dt_info já existir, substituir seu valor
+            partes[29] = dt_info_str  # Preencha a 30ª coluna (DT_INFO) com a data no formato americano
+
+        linhas_arquivo_tratado.append(';'.join(partes))
+
+# Configurações de conexão SFTP
+hostname = 'pravaler.zaap.net.br'
+port = 22
+username = 'atma'
+password = 'oZ38gT#20Qma'
+
+# Diretório remoto no WinSCP
+remote_directory = '/SAIDA/PROCESSADOS'
+
+# Crie uma conexão SSH
+transport = paramiko.Transport((hostname, port))
+transport.connect(username=username, password=password)
+sftp = paramiko.SFTPClient.from_transport(transport)
+
+try:
+    # Listar arquivos no diretório remoto
+    files = sftp.listdir(remote_directory)
+
+    for arquivo in files:
+        # Verificar se o arquivo termina com "02D.txt"
+        if arquivo.endswith('02D.txt'):
+            remote_path = os.path.join(remote_directory, arquivo)
+
+            # Caminhos completos para os arquivos de saída nos diretórios de rede
+            caminho_arquivo_saida_original = '//polaris/NectarServices/Administrativo/Output/16.PraValer/ArquivosD/Arquivo_Original/' + os.path.basename(remote_path)
+            caminho_arquivo_saida_tratado = '//polaris/NectarServices/Administrativo/Output/16.PraValer/ArquivosD/Arquivo_Tratado/' + os.path.basename(remote_path)
+
+            # Salvar o arquivo original
+            sftp.get(remote_path, caminho_arquivo_saida_original)
+            print(f"Arquivo original salvo em {caminho_arquivo_saida_original}")
+
+            # Data do arquivo a partir do nome (ATMA + YYYYMMDD + 02D.txt)
+            data_arquivo_str = arquivo[4:12]
+            data_arquivo = datetime.strptime(data_arquivo_str, '%Y%m%d')
+
+            # Subtrair um dia da data do arquivo para calcular a DT_INFO
+            dt_info = data_arquivo - timedelta(days=1)
+
+            # Formatar a DT_INFO no formato americano (YYYY-MM-DD)
+            dt_info_str = dt_info.strftime('%Y-%m-%d')
+
+            # Tratar o arquivo
+            linhas_tratadas = []
+            with open(caminho_arquivo_saida_original, 'r') as arquivo_entrada:
+                for linha in arquivo_entrada:
+                    tratar_arquivo(linhas_tratadas, linha, dt_info_str)
+
+            if linhas_tratadas:
+                # Abre o arquivo de saída tratado para escrita
+                with open(caminho_arquivo_saida_tratado, 'w') as arquivo_saida_tratado:
+                    # Adiciona o cabeçalho
+                    cabecalho = "COD_CRED;COD_OPER;CPF;NOSSO NUMERO;DATA_VCTO;BANCO_DO_BOLETO;NUMERO_DE_AGENCIA_DO_CEDENTE;CONTA_DO_CEDENTE;VALOR;DATA_HORA_PROCESSAMENTO;INSTRUCAO_1;INSTRUCAO_1;INSTRUCAO_2;INSTRUCAO_3;INSTRUCAO_4;NOME_DA_CAMPANHA;UNIDADE_DE_COBRANCA;C0DIGO_DE_BARRAS;LINHA_DIGITAVEL;PARCELA_INICIAL;PARCELA_FINAL;NOSSO_NUMERO_PARA_IMPRESSAO;DATA_DO_CALCULO;INSTRUCAO_5;INSTRUCAO_6;INSTRUCAO_7;INSTRUCAO_8;FILIAL_DO_CREDOR;CHAVE_LIGACAO;DT_INFO\n"
+                    arquivo_saida_tratado.write(cabecalho)
+
+                    # Escreve as linhas tratadas no arquivo de saída
+                    arquivo_saida_tratado.write("\n".join(linhas_tratadas))
+
+                print(f"Arquivo tratado salvo em {caminho_arquivo_saida_tratado}")
+
+except Exception as e:
+    print(f"Ocorreu um erro: {e}")
+
+finally:
+    # Fecha a conexão SFTP
+    sftp.close()
+    transport.close()

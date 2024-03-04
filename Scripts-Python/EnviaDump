@@ -1,0 +1,124 @@
+from email.mime.multipart import MIMEMultipart
+from email.mime.text import MIMEText
+from email.mime.base import MIMEBase
+from email import encoders
+import smtplib
+from datetime import datetime, timedelta
+import pyodbc
+import os
+
+# Configurações do servidor de e-mail
+smtp_server = 'smtp.office365.com'
+smtp_port = 587
+email_usuario = 'kaike1010@hotmail.com.br'
+email_senha = 'Deus@trino12'
+email_destinatarios = [
+    'jean.silva@pravaler.com.br',
+    'joao.filho@pravaler.com.br',
+    'igor.neves@pravaler.com.br',
+    'geovanna.ferreira@pravaler.com.br',
+    'datascience@atmatec.com.br',
+    'emilly.lima@atmatec.com.br',
+    'lorraine.fagundes@atmatec.com.br'
+]
+
+# Conexão ao SQL Server
+server = 'wolverine'
+database = 'Data_Science'
+username = 'python'
+password = 'python@sql'
+
+# Conexão ao SQL Server
+conn = pyodbc.connect(f'DRIVER=SQL Server;SERVER={server};DATABASE={database};UID={username};PWD={password}')
+cursor = conn.cursor()
+
+# Lógica para calcular data e nomes de arquivos
+data_hoje = datetime.now()
+
+if data_hoje.weekday() == 0:
+    # Se for segunda-feira, obtemos dados para dois dias anteriores
+    data = (data_hoje - timedelta(days=2)).strftime('%d%m%Y')
+    data_2 = (data_hoje - timedelta(days=3)).strftime('%d%m%Y')
+else:
+    data = (data_hoje - timedelta(days=1)).strftime('%d%m%Y')
+    data_2 = None
+
+nomenclatura_disparo = f'Dump_Pra_Valer_{data}.txt'
+nomenclatura_disparoT = f'Dump_Tempos_Pra_Valer_{data}.txt'
+
+# Consulta SQL para obter diretórios dos arquivos
+query = f"SELECT " \
+        f"   '//polaris/NectarServices/Administrativo/Temporario/PraValer/Dump/' + '{nomenclatura_disparo}', " \
+        f"   '//polaris/NectarServices/Administrativo/Temporario/PraValer/DumpTempos/' + '{nomenclatura_disparoT}'"
+
+diretorios = cursor.execute(query).fetchone()
+
+# Configurações do e-mail
+assunto = 'Arquivo Retorno e Tempos PraValer - (DUMP)'
+anexos = []
+
+# Adicionando arquivos principais
+anexos.extend([
+    diretorios[0],
+    diretorios[1]
+])
+
+# Adicionando arquivos extras para segunda-feira
+if data_2:
+    nomenclatura_disparo_2 = f'Dump_Pra_Valer_{data_2}.txt'
+    nomenclatura_disparo_T2 = f'Dump_Tempos_Pra_Valer_{data_2}.txt'
+    query_2 = f"SELECT " \
+              f"   '//polaris/NectarServices/Administrativo/Temporario/PraValer/Dump/' + '{nomenclatura_disparo_2}', " \
+              f"   '//polaris/NectarServices/Administrativo/Temporario/PraValer/DumpTempos/' + '{nomenclatura_disparo_T2}'"
+
+    diretorios_2 = cursor.execute(query_2).fetchone()
+    anexos.extend(diretorios_2)
+
+# Construção do corpo do e-mail em HTML
+hora = datetime.now().hour
+if 0 <= hora <= 12:
+    frase = 'Jean, bom dia! Tudo bem?'
+elif 13 <= hora <= 18:
+    frase = 'Jean, boa tarde! Tudo bem?'
+else:
+    frase = 'Jean, boa noite! Tudo bem?'
+
+corpo_html = f'''
+    {frase}<br/><br/>
+    Segue arquivo(s) Dump(s) atualizado(s).<br/><br/>
+    <h2><span style="color:#A9A9A9"><strong><span style="font-size:10px">
+    <span style="font-family:arial,helvetica,sans-serif"><em>Esta é uma mensagem automática.</em></span></span></strong></span></h2>
+    Atenciosamente,<br/>
+    <img src="//atlantida/Atma Solucoes/Administrativo/MIS/Kaike Natan/Assinatura.PNG" /><br/>
+'''
+
+# Função para enviar e-mail
+def enviar_email(para, copia, assunto, corpo_html, anexos):
+    msg = MIMEMultipart()
+    msg['From'] = email_usuario
+    msg['To'] = para
+    msg['Cc'] = copia
+    msg['Subject'] = assunto
+
+    msg.attach(MIMEText(corpo_html, 'html'))
+
+    for anexo in anexos:
+        with open(anexo, 'rb') as arquivo:
+            parte_anexo = MIMEBase('application', 'octet-stream')
+            parte_anexo.set_payload(arquivo.read())
+        encoders.encode_base64(parte_anexo)
+        parte_anexo.add_header('Content-Disposition', f'attachment; filename="{os.path.basename(anexo)}"')
+        msg.attach(parte_anexo)
+
+    with smtplib.SMTP(smtp_server, smtp_port) as server:
+        server.starttls()
+        server.login(email_usuario, email_senha)
+        server.sendmail(email_usuario, para.split(',') + copia.split(','), msg.as_string())
+
+# Chamada da função para enviar e-mail
+enviar_email(', '.join(email_destinatarios), '', assunto, corpo_html, anexos)
+
+# Fechar conexão com o banco de dados
+conn.close()
+
+print("Email Enviado Com Sucesso!")

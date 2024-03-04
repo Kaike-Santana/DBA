@@ -1,0 +1,54 @@
+import pyodbc
+import os
+from datetime import datetime, timedelta
+
+# Configurações de conexão ao SQL Server
+server = 'wolverine'
+database = 'data_science'
+username = 'python'
+password = 'python@sql'
+driver = 'ODBC Driver 17 for SQL Server'
+
+# Caminho da pasta de saída
+output_folder = r'\\polaris\NectarServices\Administrativo\Output\16.PraValer\01.ArquivodeRetorno\2023'
+
+# Data de início e fim
+start_date = datetime(2023, 7, 1)
+end_date = datetime(2023, 7, 31)
+
+# Conexão com o banco de dados
+conn = pyodbc.connect(f'DRIVER={driver};SERVER={server};DATABASE={database};UID={username};PWD={password}')
+
+# Loop para cada dia
+current_date = start_date
+while current_date <= end_date:
+    # Verifica se o dia é domingo (weekday = 6)
+    if current_date.weekday() != 6:
+        formatted_date = current_date.strftime('%Y%m%d')
+        output_file = os.path.join(output_folder, f'DUMP_PRA_VALER_{formatted_date}.txt')
+
+        # Consulta SQL
+        query = f'''
+            SELECT EMPRESA,DATA,CPF_DEV,FUNDO,FAIXA_ATRASO,SALDO,DISCAGEM,ACIONAMENTO,ALO,DESCONHECE,CPC,PROMESSA,DISCAGENS_UNIQUE,ACIONAMENTO_UNIQUE,ALO_UNIQUE,DESCONHECE_UNIQUE,CPC_UNIQUE,PROMESSA_UNIQUE
+            FROM data_science.dbo.tb_ds_analitico_dump_pravaler
+            WHERE Data = '{current_date.strftime('%Y-%m-%d')}'
+        '''
+
+        cursor = conn.cursor()
+        cursor.execute(query)
+        rows = cursor.fetchall()
+
+        with open(output_file, 'w') as f:
+            header = ';'.join(['EMPRESA', 'DATA', 'CPF_DEV', 'FAIXA_ATRASO', 'SALDO', 'DISCAGEM', 'ACIONAMENTO', 'ALO', 'DESCONHECE', 'CPC', 'PROMESSA', 'DISCAGENS_UNIQUE', 'ACIONAMENTO_UNIQUE', 'ALO_UNIQUE', 'DESCONHECE_UNIQUE', 'CPC_UNIQUE', 'PROMESSA_UNIQUE'])
+            f.write(header + '\n')
+            
+            for row in rows:
+                line = ';'.join(str(col) for col in row)
+                f.write(line + '\n')
+
+        cursor.close()
+
+    current_date += timedelta(days=1)
+
+conn.close()
+print('Exportação concluída.')
