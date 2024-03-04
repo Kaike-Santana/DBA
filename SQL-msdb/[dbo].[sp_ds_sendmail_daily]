@@ -1,0 +1,91 @@
+USE [Data_Science]
+GO
+/****** Object:  StoredProcedure [dbo].[sp_ds_sendmail_daily]    Script Date: 10/02/2023 11:56:57 ******/
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+
+ALTER proc [dbo].[sp_ds_sendmail_daily]
+as begin
+
+DECLARE
+    @HTML VARCHAR(MAX),
+    @HTML1 VARCHAR(MAX),
+	@HTML2 VARCHAR(MAX),
+	@HTML3 VARCHAR(MAX),
+	@ASSUNTO VARCHAR(MAX)
+
+SET @ASSUNTO = (CASE WHEN LEFT(CONVERT(TIME,GETDATE()),2) >= '12' THEN N'Diário de Bordo - Vespertino' else N'Diário de Bordo - Matutino' end)
+   
+IF OBJECT_ID('tempdb..##Tabela3') IS NOT NULL DROP TABLE ##Tabela3
+SELECT convert(varchar,MAX(Data_Res),103) [Ultima Informação], 'RespostasMKM' AS Tabela INTO ##Tabela3 FROM MKM.dbo.RespostasMKM
+union
+SELECT convert(varchar,MAX(Data_Sms),103) [Ultima Informação], 'SMS_MKM' AS Tabela FROM MKM.dbo.SMS_MKM
+
+EXEC Data_Science.dbo.stpExporta_Tabela_HTML_Output
+    @Ds_Tabela = '##Tabela3', -- varchar(max)
+    @Ds_Saida = @HTML3 OUTPUT
+
+IF OBJECT_ID('tempdb..##Tabela') IS NOT NULL DROP TABLE ##Tabela
+SELECT 
+name as Banco,
+collation_name as Lang,
+state_desc as Status
+INTO ##Tabela
+FROM
+    Reports.sys.databases 
+
+	
+EXEC Data_Science.dbo.stpExporta_Tabela_HTML_Output
+    @Ds_Tabela = '##Tabela', -- varchar(max)
+    @Ds_Saida = @HTML1 OUTPUT, -- varchar(max)
+    @Fl_Aplica_Estilo_Padrao = 0 
+
+
+IF OBJECT_ID('tempdb..##Tabela2') IS NOT NULL DROP TABLE ##Tabela2
+SELECT
+ OBJECT_NAME(m.object_id) AS 'Procedure',
+ convert(varchar,MAX(qs.last_execution_time),103) AS [Ultima Execucao],
+ convert(varchar,MAX(qs.last_execution_time),108) AS [Hora]
+into ##Tabela2
+FROM data_science.sys.sql_modules m
+LEFT JOIN (sys.dm_exec_query_stats qs
+CROSS APPLY sys.dm_exec_sql_text(qs.sql_handle) st)
+ ON m.object_id = st.objectid
+ AND st.dbid = DB_ID()
+GROUP BY OBJECT_NAME(m.object_id)
+
+
+EXEC Data_Science.dbo.stpExporta_Tabela_HTML_Output
+    @Ds_Tabela = '##Tabela2', -- varchar(max)
+    @Ds_Saida = @HTML2 OUTPUT, -- varchar(max)
+    @Fl_Aplica_Estilo_Padrao = 0 
+
+
+SET @HTML = '
+<h2>Tabelas MKM</h2>
+Veja a lista das últimas datas encontradas nas tabelas da MKM:<br/><br/>' + ISNULL(@HTML3, '') + '
+
+<br/><br/>
+<h2>Bancos Wolverine</h2>
+Status dos bancos no Wolverine:<br/><br/>' + ISNULL(@HTML1, '') + '
+
+<br/><br/>
+<h2>Última Execução: Data_Science</h2>
+Veja a lista das últimas execuções do Data_Science:<br/><br/>' + ISNULL(@HTML2, '') + '
+
+<br/><br/>
+<h2><span style="color:#A9A9A9"><strong><span style="font-size:10px"><span style="font-family:arial,helvetica,sans-serif"><em>Est&aacute; &eacute; uma mensagem autom&aacute;tica.</em></span></span></strong></span></h2>
+Atenciosamente,<br/>
+<img src="\\atlantida\Atma Solucoes\Administrativo\MIS\Walter\Capturar.png" /><br/>
+
+'
+
+--EXEC msdb.dbo.sp_send_dbmail
+--    @profile_name = 'Admin',
+--    @recipients = 'datascience@atmatec.com.br',
+--    @subject = @ASSUNTO,
+--    @body = @HTML, 
+--    @body_format = 'html'
+end
