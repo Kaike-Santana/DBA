@@ -11,7 +11,6 @@
 /*        2. PROGRAMADOR:													 DATA: __/__/____	*/		
 /*           DESCRICAO  :										 								*/
 /*::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::*/
-BEGIN TRANSACTION;
 	DECLARE @DATA DATE = CONVERT(DATE,GETDATE()-6)	-- <-- COLOCAR A DATA DA SAVE AQUI!
 
 /*::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::*/
@@ -36,7 +35,7 @@ GO
 /* DESCRICAO: POPULA TABELA COM BASE RECEBIDA DO CLIENTE									    */
 /*::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::*/
 BULK INSERT #SAVE_TXT
-FROM '\\nectar\NectarServices\Administrativo\Temporario\Base Save\Nosso TXT\base_save_12.05_bulk.txt'
+FROM '\\polaris\NectarServices\Administrativo\Temporario\Base Save\Nosso TXT\base_save.27.02_insert.txt'
 WITH
 (
 FIRSTROW = 1,
@@ -50,7 +49,7 @@ GO
 DROP TABLE IF EXISTS #SAVE
 SELECT 
 		CPF
-,		CHAVE_CYBER		=	IIF(LEFT(CHAVE_CYBER,1) = 0, SUBSTRING(RTRIM(LTRIM(CHAVE_CYBER)),2,LEN(RTRIM(LTRIM(CHAVE_CYBER)))), RTRIM(LTRIM(CHAVE_CYBER)))
+,		CHAVE_CYBER		=	IIF(LEFT(CHAVE_CYBER,1) = '0', SUBSTRING(RTRIM(LTRIM(CHAVE_CYBER)),2,LEN(RTRIM(LTRIM(CHAVE_CYBER)))), RTRIM(LTRIM(CHAVE_CYBER)))
 ,		RATING
 ,		DATA_ROLAGEM
 ,		SALDO_CONTABIL
@@ -75,5 +74,3 @@ FROM REPORTS.DBO.TB_SAVE_RIACHUELO_ULTIMA
 WHERE DT_INFO	=	@DATA
 GROUP BY 
 	DT_INFO
-
-COMMIT TRANSACTION;

@@ -6,9 +6,17 @@ DECLARE @TSQL VARCHAR(8000)
 DECLARE @IP VARCHAR(13) = '[10.251.1.36]'
 
 /*::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::*/
+/* DESCRICAO: IMPORTA BASE DA CLIENTE DEPOIS DO ETL DA TABELA									*/
+/*::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::*/
+DROP TABLE IF EXISTS #BASE
+SELECT *
+INTO #BASE
+FROM OPENROWSET('Microsoft.ACE.OLEDB.12.0',
+'Excel 12.0 Xml;HDR=YES;Database=\\polaris\NectarServices\Administrativo\Mailing_AD\Base_Mailing_20230731.xlsx',
+'SELECT * FROM [Planilha1$]'); --> nome da sheet do seu excel
+/*::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::*/
 /* DESCRICAO  :COLETA AS INFORMAÇÕES DA ULTIMA SAVE POR CONTRATO							    */
 /*::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::*/
-
 SELECT 
  A.CHAVE_CYBER
 ,A.SALDO_CONTABIL
@@ -22,11 +30,9 @@ SELECT
 ,ROW_NUMBER () OVER(PARTITION BY CHAVE_CYBER ORDER BY DT_INFO DESC) RW  
 FROM REPORTS.DBO.TB_SAVE_RIACHUELO) A 
 WHERE RW = 1
-
 /*::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::*/
 /* DESCRICAO  :ANALITICO DE PRODUTIVIDADE SEM ACORDO										    */
 /*::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::*/
-
 IF OBJECT_ID ('tempdb.dbo.##PRO') IS NOT NULL DROP TABLE ##PRO
 SELECT  @TSQL = 
 'SELECT * INTO ##PRO FROM 
@@ -71,11 +77,9 @@ LEFT JOIN  [NECTAR].[DBO].[TB_DOCUMENTO] WITH(NOLOCK) ON IDDOC_DOC = IDDOC_TRA
 WHERE IDEMP_CON IN (3,5,6) 
 AND DTAND_AND BETWEEN '''''+@D1+''''' AND ''''' +@D2+ ''''''')'
 EXEC(@TSQL)
-
 /*::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::*/
 /* DESCRICAO  :ETL ANALITICO DE PRODUTIVIDADE SEM ACORDO										*/
 /*::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::*/
-
 IF OBJECT_ID('TEMPDB..#PROD') IS NOT NULL DROP TABLE #PROD
 SELECT 
  CONVERT(DATE,DTAND_AND) DTAND_AND
@@ -109,11 +113,9 @@ GROUP BY
 ,IDPES_PES
 ,USUAR_PES
 ,CONTR_CON
-
 /*::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::*/
 /* DESCRICAO  :ANALITICO DE ACORDO																*/
 /*::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::*/
-
 SELECT @TSQL =   
 'IF OBJECT_ID(''TEMPDB..##MMM'') IS NOT NULL DROP TABLE ##MMM
 SELECT * INTO ##MMM FROM  
@@ -168,11 +170,9 @@ WHERE DTACO_ACO BETWEEN '''''+ @D1 +''''' AND '''''+ @D2 +'''''
 AND IDEMP_CON IN (3,5,6)''
 ) A'  
 EXEC (@TSQL)    
-
 /*::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::*/
 /* DESCRICAO  :ETL E CONSOLIDAÇÃO DO ANALITICO DE ACORDO COM PRODUÇÃO							*/
 /*::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::*/
-
 IF OBJECT_ID('TEMPDB..#MMMM') IS NOT NULL DROP TABLE #MMMM 
 SELECT DISTINCT    
  CONVERT(DATE,DTACO_ACO) DTACO_ACO  
@@ -236,11 +236,9 @@ GROUP BY
 ,AGING
 ,IDOCO_AND
 ,VLMAC_CON
-
 /*::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::*/
 /* DESCRICAO  :ANALITICO PRODUÇÃO CRUZANDO COM A BASE DA CAMPANHA								*/
 /*::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::*/
-
 SELECT 
  A.*
 ,TABULADO ALO
@@ -251,23 +249,13 @@ SELECT
 INTO #ANALITICO
 FROM #FINAL A
 LEFT JOIN Reports..AUX_DEXPARA_ATMA ON IDOCO_OCO = IDOCO_DXP
-	INNER JOIN REPORTS..TEMP_CAMPANHA_ESPECIAL_RCHLO ON CPF = CGCPF_DEV
+	INNER JOIN #BASE ON CPF = CGCPF_DEV
 		LEFT JOIN #SAVE ON CONTR_CON = CHAVE_CYBER
 WHERE SISTEMA = 0 
 AND CONVERT(DATE,DTACO_ACO) BETWEEN @D1 AND @D2
-
----DELETE FROM REPORTS..TB_DS_ANALITICO_PROD_CAMPANHA_RCHLO WHERE DTACO_ACO BETWEEN @D1 AND @D2
----INSERT INTO REPORTS..TB_DS_ANALITICO_PROD_CAMPANHA_RCHLO
----SELECT * FROM #ANALITICO
-
-
 /*::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::*/
 /* DESCRICAO  :LAYOUT FINAL ABERTO POR DIA														*/
 /*::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::*/
-
---DELETE FROM REPORTS..FUNIL_RCHLO_360 WHERE DATA BETWEEN @D1 AND @D2
---INSERT INTO REPORTS..FUNIL_RCHLO_360
-
 SELECT 
  DTACO_ACO DATA
 ,COUNT(CGCPF_DEV) DISCADAS
@@ -279,17 +267,10 @@ SELECT
 ,SUM(CONTABIL) CONTABIL 
 FROM #ANALITICO
 WHERE CONVERT(DATE,DTACO_ACO) BETWEEN @D1 AND @D2
-GROUP BY 
- DTACO_ACO
-ORDER BY 1
-
+GROUP BY DTACO_ACO
 /*::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::*/
 /* DESCRICAO  :LAYOUT FINAL VISÃO UNIQUE MES													*/
 /*::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::*/
-
---TRUNCATE TABLE REPORTS..FUNIL_RCHLO_360_U 
---INSERT INTO REPORTS..FUNIL_RCHLO_360_U 
-
 SELECT 
  COUNT(CGCPF_DEV) DISCADAS
 ,COUNT(DISTINCT CGCPF_DEV) PENETRADO
@@ -301,7 +282,3 @@ SELECT
 ,SUM(DISTINCT CASE WHEN ACORDO = 1 THEN  CONVERT(MONEY,CONTABIL) END) ACO_CONTABIL
 ,SUM(DISTINCT CASE WHEN PAGTO = 1 THEN   CONVERT(MONEY,CONTABIL) END)  PGT_CONTABIL 
 FROM REPORTS..TB_DS_ANALITICO_PROD_CAMPANHA_RCHLO
-
-
-
-

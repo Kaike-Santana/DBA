@@ -5,17 +5,14 @@ GO
 /*::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::*/
 /*																								*/
 /* PROGRAMADOR: KAIKE NATAN										                                */
-/* VERSAO     : DATA: 08/08/2022																*/
+/* VERSAO     : DATA: 27/02/2023																*/
 /* DESCRICAO  : RESPONSÁVEL POR ATUALIZAR A TABELA DO PROJETO ATSPACE							*/
 /*																								*/
 /*	ALTERACAO                                                                                   */
-/*        2. PROGRAMADOR: KAIKE NATAN										DATA: 13/02/2023	*/		
-/*           DESCRICAO : INCLUSÃO DE 3 COLUNAS (ID SUPERSOFT, COD EMPRESA E TIPO CONTRATO		*/
-/*	ALTERACAO                                                                                   */
-/*        3. PROGRAMADOR:													 DATA: __/__/____	*/		
+/*        2. PROGRAMADOR:													 DATA: __/__/____	*/		
 /*           DESCRICAO  :																		*/
 /*::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::*/
-
+	 CREATE PROCEDURE PRC_DS_ATUALIZA_ATSPACE AS
 /*::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::*/
 /* DESCRICAO: CRIA TABELA NO LAYOUT SOLICITADO													*/
 /*::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::*/ 
@@ -36,7 +33,43 @@ COD_EMP INT NULL,
 EMPRESA VARCHAR(MAX) NULL,
 TIPO_CON VARCHAR(MAX) NULL
 );
-GO
+/*::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::*/
+/* DESCRICAO: FAZ O ETL DOS DADOS DIRETOS DO FIREBIRD											*/
+/*::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::*/ 
+DROP TABLE IF EXISTS #SS
+SELECT *
+INTO #SS
+FROM OPENQUERY([FIREBIRD SS],'
+SELECT
+  Codfunc
+, Nome
+, CPF
+,case
+    when Departamento in (''AMBEV'',''Ambev'')                                                               then ''AMBEV''
+    when Departamento in (''SOLFACIL'',''SOL FACIL'')                                                        then ''SOLFACIL''
+    when Departamento in (''CAEDU'',''Caedu'')                                                               then ''CAEDU''
+    when Departamento in (''DIGITAL'',''digital'')                                                           then ''DIGITAL''
+    when Departamento in (''METALFRIO'',''METAL FRIO'',''SAC'')                                              then ''METALFRIO''
+    when Departamento in (''ORIGINAL'',''ORGINAL'',''original'',''ORIGINALÇ'',''ORIGNAL'')                   then ''ORIGINAL''
+    when Departamento in (''PICPAY'',''PIC PAY'',''PICPPAY'')                                                then ''PICPAY''
+    when Departamento in (''PRAVALER'',''PRA VALER'')                                                        then ''PRAVALER''
+    when Departamento in (''PREVENTIVO'',''Preventivo'')                                                     then ''PREVENTIVO''
+    when Departamento in (''RENNER'',''renner'')                                                             then ''RENNER''
+    when Departamento in (''RIACHELO'',''riachuelo'',''RIACHUELO'',''RIACHUELO CURTO'',''RIACHUELO LONGO'')  then ''RIACHUELO''
+    when Departamento in (''TEXA'',''Texa'')																 then ''TEXA''
+    when Departamento in (''VELOE'')																		 then ''VELOE''
+    when Departamento in (''VITAMINA'')																		 then ''VITAMINA''
+    else Departamento end  as Departamento
+, replace(cast(dtadmit as date),''.'',''/'')   as DT_ADM
+, case when DtResc is null then null when DtResc is not null then replace(cast(DtResc as date),''.'',''/'') end as DT_DEM
+, hollpad   as TP_Contrato
+, cencust
+, entradam  as Hora_entrada
+, salatual
+, saidat    as Hora_saida
+, horasmes  as Carga_Horaria
+, abrev
+FROM FUNCIO')
 /*::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::*/
 /* DESCRICAO: FAZ O ETL DAS INFORMAÇÕES E INSERE NA TABELA CRIADA ACIMA							*/
 /*::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::*/ 
@@ -56,6 +89,4 @@ SELECT
 ,	COD_EMP			=	IIF(ABREV = 'ATMA', 0, 1)
 ,	EMPRESA			=	ABREV
 ,	TIPO_CON		=	IIF(ABREV = 'ATMA', 'CLT', 'ESTAGIO')
-FROM OPENROWSET('Microsoft.ACE.OLEDB.12.0',
-'Excel 12.0 Xml;HDR=YES;Database=\\polaris\NectarServices\Administrativo\Output\ATSPACE\ATSPACE.xlsx',
-'SELECT * FROM [Planilha1$]')
+FROM #SS

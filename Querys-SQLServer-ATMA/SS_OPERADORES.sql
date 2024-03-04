@@ -5,14 +5,14 @@ GO
 /*::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::*/
 /*																								*/
 /* PROGRAMADOR: KAIKE NATAN										                                */
-/* VERSAO     : DATA: 08/08/2022																*/
+/* VERSAO     : DATA: 27/02/2023																*/
 /* DESCRICAO  : RESPONSÁVEL POR ATUALIZAR A TABELA DE OPERADORES DO SUPERSOFT					*/
 /*																								*/
 /*	ALTERACAO                                                                                   */
 /*        2. PROGRAMADOR:													 DATA: __/__/____	*/		
 /*           DESCRICAO  :																		*/
 /*::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::*/
-
+	 CREATE PROCEDURE PRC_DS_ATUALIZA_OPERADORES AS 
 /*::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::*/
 /* DESCRICAO: TRAZ AS INFORMAÇÕES DO CALLFLEX													*/
 /*::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::*/ 
@@ -59,10 +59,47 @@ from replica_atmsp3b1.agents')
 DROP TABLE IF EXISTS #TMP_OPERADOR
 SELECT *
 INTO #TMP_OPERADOR
-FROM OPENROWSET('MICROSOFT.ACE.OLEDB.12.0',
-'EXCEL 12.0 XML;HDR=YES;DATABASE=\\polaris\NectarServices\Administrativo\Output\TB_OPERADORES\Operadores.xlsx'
-,'SELECT *
-FROM [PLANILHA1$]');
+FROM OPENQUERY([FIREBIRD SS],'
+select distinct
+ f.nome Nome
+,REPLACE(REPLACE(f.cpf,''.'',''''),''-'','''')CPF
+,case
+    when rtrim(ltrim(ce.Custo)) in (''AMBEV'')                               then ''AMBEV''
+    when rtrim(ltrim(ce.Custo)) in (''SOLFACIL'',''Solfacil'',''SOLFÁCIL'')  then ''SOLFACIL''
+    when rtrim(ltrim(ce.Custo)) in (''CAEDU'',''Caedu'')                     then ''CAEDU''
+    when rtrim(ltrim(ce.Custo)) in (''DIGITAL'',''Digital'')                 then ''DIGITAL''                        
+    when rtrim(ltrim(ce.Custo)) in (''METALFRIO'',''Metalfrio'',''SAC'')     then ''METALFRIO''
+    when rtrim(ltrim(ce.Custo)) in (''ORIGINAL'',''Original'')               then ''ORIGINAL''
+    when rtrim(ltrim(ce.Custo)) in (''PICPAY'',''PicPay'')                   then ''PICPAY''
+    when rtrim(ltrim(ce.Custo)) in (''Pravaler'',''Pra Valer'')              then ''PRAVALER''
+    when rtrim(ltrim(ce.Custo)) in (''PREVENTIVO'',''Preventivo'')           then ''PREVENTIVO''
+    when rtrim(ltrim(ce.Custo)) in (''RENNER'',''Renner'')                   then ''RENNER''
+    when rtrim(ltrim(ce.Custo)) in (''RIACHUELO'',''Riachuelo'')             then ''RIACHUELO''
+    when rtrim(ltrim(ce.Custo)) in (''TEXA'',''Texa'')                       then ''TEXA''  
+    when rtrim(ltrim(ce.Custo)) in (''VELOE'',''ALELO'',''Veloe'')           then ''VELOE''
+    when rtrim(ltrim(ce.Custo)) in (''Vitamina'',''VITAMINA'')               then ''VITAMINA''
+    else ce.custo
+ end Setor
+,case
+    when DtResc is null then ''S''
+    when DtResc is not null then ''N''
+ end Ativo
+,replace(cast(dtadmit as date),''.'',''/'') as  Admissao
+,case
+    when DtResc is null then null
+    when DtResc is not null then replace(cast(DtResc as date),''.'',''/'')
+ end Demissao
+,cast(EntradaM as time) as Entrada
+,cast(SaidaT as time) as Saida
+,case
+    when HollPad = ''PADRAO1'' then ''CLT''
+    when HollPad = ''ESTAGIARIO'' then ''ESTAGIARIO''
+    else HollPad 
+ end Contrato
+,c.cargo
+from funcio     f
+join CARGOS     c   on f.CodCargo = c.Codigo
+join CENCUST    ce  on ce.Cod     = f.CenCust')
 /*::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::*/
 /* DESCRICAO: TRAZ O IDPES DO NECTAR E O ID DA CALLFLEX											*/
 /*::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::*/
