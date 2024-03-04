@@ -1,0 +1,61 @@
+import os
+import pandas as pd
+import pyodbc
+
+# Especificar o diretório onde os arquivos estão localizados
+diretorio_origem = r'\\10.251.1.64\NectarServices\Nectar\Solfácil\Backup\Carga\Pgto_Parcela_Acordo_-_SolFacil\\'
+diretorio_destino = r'\\atlantida\MIS\00.RelatoriosMIS\SolFacil\04.Avulso\PAGAMENTOS\\'
+
+# Lista para armazenar os DataFrames de cada arquivo
+dfs = []
+
+flag = '2024'
+
+# Iterar sobre os arquivos no diretório de origem
+for arquivo in os.listdir(diretorio_origem):
+    if pd.Series(arquivo).str.contains(flag).any() and arquivo.endswith(".csv"):
+        caminho_arquivo = os.path.join(diretorio_origem, arquivo)
+        
+        # Configuração da conexão ao SQL Server
+        server = "wolverine"
+        database = "data_science"
+        username = "python"
+        password = "python@sql"
+
+        # Conexão ao SQL Server
+        conn = pyodbc.connect(f"Driver={{SQL Server}};Server={server};Database={database};UID={username};PWD={password}")
+        
+        # Ler o conteúdo do arquivo para um DataFrame
+        df = pd.read_csv(caminho_arquivo, delimiter=';')  # Altere o delimitador conforme necessário
+        
+        # Adicionar uma coluna com o nome do arquivo
+        df['ARQUIVO'] = os.path.splitext(arquivo)[0]
+        
+        dfs.append(df)
+
+
+# Concatenar os DataFrames em um único DataFrame
+df_consolidado = pd.concat(dfs, ignore_index=True)
+
+df_final = df_consolidado[['ID', 'Fundo', 'Parcela', 'DiasAtraso', 'ValorPagamento', 'DataPagamentoBoleto']]
+
+# Correção para evitar SettingWithCopyWarning
+df_final.loc[:, 'ValorPagamento'] = df_final['ValorPagamento'].str.replace(',','.')
+df_final.loc[:, 'ValorPagamento'] = df_final['ValorPagamento'].astype('float')
+
+# Salvar o DataFrame consolidado no diretório de destino
+nome_planilha = f'PAGAMENTOS_{flag}.xlsx'
+caminho_destino = os.path.join(diretorio_destino, nome_planilha)
+
+df_final.to_excel(caminho_destino, index=False)
+
+# Executar truncate table
+cursor = conn.cursor()
+cursor.execute('TRUNCATE TABLE tb_ds_pagamentos_solfacil')
+conn.commit()
+
+# Executar insert into na tabela tb_ds_pagamentos_solfacil
+df_final.to_sql('tb_ds_pagamentos_solfacil', conn, if_exists='replace', index=False, method='multi')
+
+# Fechar a conexão
+conn.close()
