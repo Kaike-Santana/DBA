@@ -1,0 +1,19 @@
+#!/bin/bash
+
+# Configurações
+usuario_mysql="seu_usuario"
+senha_mysql="sua_senha"
+pasta_backup="/caminho/do/backup"
+
+# Obter lista de bancos de dados
+bancos_dados=$(mysql -u$usuario_mysql -p$senha_mysql -e "SHOW DATABASES;" | grep -Ev "(Database|information_schema|performance_schema|mysql)")
+
+# Data atual para nomear o arquivo de backup
+data_atual=$(date +"%Y%m%d_%H%M%S")
+
+# Loop para fazer backup de cada banco de dados
+for banco in $bancos_dados; do
+    mysqldump -u$usuario_mysql -p$senha_mysql $banco > $pasta_backup/$banco_$data_atual.sql
+done
+
+echo "Backup concluído em $data_atual"
