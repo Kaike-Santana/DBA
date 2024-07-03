@@ -1,0 +1,31 @@
+USE [THESYS_DEV]
+GO
+
+INSERT INTO [THESYS_HOMOLOGACAO]..[Grupo_Clientes]
+           ([cod_antigo]
+           ,[descricao]
+           ,[cod_novo]
+           ,[incl_data]
+           ,[incl_user]
+           ,[incl_device]
+           ,[modi_data]
+           ,[modi_user]
+           ,[modi_device]
+           ,[excl_data]
+           ,[excl_user]
+           ,[excl_device])
+select 
+[cod_antigo]
+           ,[descricao]
+           ,[cod_novo]
+           ,[incl_data]
+           ,[incl_user]
+           ,[incl_device]
+           ,[modi_data]
+           ,[modi_user]
+           ,[modi_device]
+           ,[excl_data]
+           ,[excl_user]
+           ,[excl_device]
+from [Grupo_Clientes]
+
