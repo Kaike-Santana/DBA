@@ -44,6 +44,7 @@ JOIN
 WHERE 
     t.type = 'U' -- Somente tabelas de usuário
     AND t.name NOT LIKE '\_%' ESCAPE '\' 
+	and t.name not in ('EFD_Registros_C100','EFD_Registros_C170','EFD_Registros_C190','NFe_Chave_Historico')
 /*::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::*/
 /* DESCRICAO: LOOP PARA ITERAR SOBRE TODAS AS TABELAS											*/
 /*::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::*/

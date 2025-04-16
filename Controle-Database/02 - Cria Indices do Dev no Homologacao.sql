@@ -43,7 +43,8 @@ JOIN
     [thesys_dev].sys.schemas s ON t.schema_id = s.schema_id
 WHERE 
     t.type = 'U' -- Somente tabelas de usuário
-    AND t.name NOT LIKE '\_%' ESCAPE '\'; -- Excluir tabelas que começam com '_'
+    AND t.name NOT LIKE '\_%' ESCAPE '\' -- Excluir tabelas que começam com '_'
+	and t.name not in ('EFD_Registros_C100','EFD_Registros_C170','EFD_Registros_C190','NFe_Chave_Historico')
 /*::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::*/
 /* DESCRICAO: LOOP PARA ITERAR SOBRE TODAS AS TABELAS											*/
 /*::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::*/
