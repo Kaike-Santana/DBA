@@ -1,0 +1,100 @@
+import pyodbc
+import smtplib
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
+from datetime import datetime
+
+# Configurações de conexão ao banco de dados
+server = '10.200.0.4'
+database = 'thesys_dev'
+username = 'sa'
+password = '$MASTER@2023#'
+cnxn = pyodbc.connect('DRIVER={SQL Server};SERVER='+server+';DATABASE='+database+';UID='+username+';PWD='+password)
+
+# Criação de um cursor para execução de consultas
+cursor = cnxn.cursor()
+
+# Consulta para obter os dados dos jobs
+query = """
+SELECT DISTINCT name AS NomeJob,
+                CONVERT(NVARCHAR(20), CONVERT(DATETIME, RTRIM(run_date), 113), 103) AS UltimaExecucao,
+                CASE WHEN enabled = 1 THEN 'Habilitada' ELSE 'Desabilitado' END AS StatusJob,
+                CASE WHEN SJH.run_status = 0 THEN 'Falho'
+                     WHEN SJH.run_status = 1 THEN 'Sucesso'
+                     WHEN SJH.run_status = 2 THEN 'Tentando'
+                     WHEN SJH.run_status = 3 THEN 'Cancelado'
+                     ELSE 'Desconhecido'
+                END AS StatusUltimaExecucao
+FROM msdb..sysjobhistory SJH
+     JOIN msdb..sysjobs SJ ON SJH.job_id = SJ.job_id
+WHERE step_id = 0
+      AND CONVERT(DATETIME, RTRIM(run_date), 113) >= DATEADD(d, -1, GETDATE())
+      AND SJH.instance_id = (SELECT MAX(b.instance_id) FROM msdb..sysjobhistory b WHERE SJH.job_id = b.job_id)
+ORDER BY 1, 2, 3, 4
+"""
+
+# Execução da consulta
+cursor.execute(query)
+
+# Obtenção dos resultados da consulta
+results = cursor.fetchall()
+
+# Configuração do corpo do e-mail
+body = """
+<table border=1 width='100%'>
+    <tr>
+        <th colspan='4' bgcolor='darkblue'>
+            <h3>Segue {periodo} {Frase} {Servidor}</h3>
+        </th>
+    </tr>
+    <tr bgcolor='lightblue'>
+        <th>Nome do Job</th>
+        <th>Ultima Vez executou</th>
+        <th>Status do Job</th>
+        <th>Status da Ultima Execucao</th>
+    </tr>
+    {result}
+    <tr>
+        <td colspan='4' bgcolor='darkblue' align='right'>
+            Informacao extraida em: {data_atual}
+        </td>
+    </tr>
+</table>
+""".format(
+    periodo="Bom dia" if 0 <= datetime.now().hour <= 12 else ("Boa Tarde" if 13 <= datetime.now().hour <= 18 else "Boa Noite"),
+    Frase='Monitoramento dos Jobs referente ao servidor:',
+    Servidor=server,
+    result='\n'.join(['<tr><td>{}</td><td>{}</td><td>{}</td><td>{}</td></tr>'.format(row.NomeJob, row.UltimaExecucao, row.StatusJob, row.StatusUltimaExecucao) for row in results]),
+    data_atual=datetime.now().strftime("%d de %B de %Y")
+)
+
+# Configuração do servidor SMTP
+smtp_server = 'smtp.office365.com'
+smtp_port = 587
+smtp_username = 'kaike1010@hotmail.com.br'
+smtp_password = 'Deus@trino12'
+
+# Configuração do e-mail
+sender_email = 'kaike1010@hotmail.com.br'
+receiver_email = 'kaike.santana@atrpservices.com.br'
+subject = 'Relatório dos Status dos Jobs'
+
+# Configuração do corpo do e-mail como MIMEText
+msg = MIMEMultipart()
+msg.attach(MIMEText(body, 'html'))
+
+# Configuração dos cabeçalhos do e-mail
+msg['From'] = sender_email
+msg['To'] = receiver_email
+msg['Subject'] = subject
+
+# Envio do e-mail
+with smtplib.SMTP(smtp_server, smtp_port) as server:
+    server.starttls()
+    server.login(smtp_username, smtp_password)
+    server.sendmail(sender_email, receiver_email, msg.as_string())
+
+# Fechamento da conexão com o banco de dados
+cnxn.close()
+
+print("E-mail Enviado Com Sucesso!!")
